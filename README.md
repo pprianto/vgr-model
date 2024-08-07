@@ -7,7 +7,8 @@
 This repository contains scripts in Python and Julia
 <br/>
 <br/>
-Python scripts are intended for the following uses:
+Python scripts are mainly adapting scripts from [PyPSA-earth](https://github.com/pypsa-meets-earth/pypsa-earth)<br/>
+The scripts are intended for the following uses:
 
 - retrieve grid infrastructure data from OpenStreetMap ([retrieve_osm.py](src/retrieve_osm.py))
 - clean infrastructure data ([build_elnet.py](src/build_elnet.py))
@@ -16,6 +17,7 @@ Python scripts are intended for the following uses:
 - construct voronoi cells for assigning power plants to the substation nodes ([voronoi_subs.py](src/voronoi_subs.py))
 <br/>
 <br/>
+
 The Julia scripts provide the core optimization of the model <br/>
 The model takes input data from ```\modelinput```, which currently still is dummy data <br/>
 As the script name suggests, each script contains the following:
