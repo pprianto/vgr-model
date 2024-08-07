@@ -1,6 +1,8 @@
 # vgr-model
  Energy Systems Model (ESM) for Västra Götalandsregionen (West Coast), Sweden
 
+![VGR](vgr.PNG)
+
 # Description
 This repository contains scripts in Python and Julia
 <br/>
@@ -15,7 +17,7 @@ Python scripts are intended for the following uses:
 <br/>
 <br/>
 The Julia scripts provide the core optimization of the model <br/>
-The model takes input data from `\modelinput` <br/>
+The model takes input data from ```\modelinput```, which currently still is dummy data <br/>
 As the script name suggests, each script contains the following:
 
 + main script to run the model ([rm_Main.jl](src/rm_Main.jl))
