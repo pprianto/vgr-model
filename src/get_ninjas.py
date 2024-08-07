@@ -297,7 +297,7 @@ if __name__ == "__main__":
 
 
     # API token from profile
-    token = "40d8dfcd221e3c45183f19a890b802ed40c008a9"
+    token = "insert API token here"
     api_base = "https://www.renewables.ninja/api/"
 
 
