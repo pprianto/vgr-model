@@ -35,7 +35,9 @@ Return
     MODEL PARAMETERS / INPUT DATA
     ------------------------------------------------------------------------------=#
 
-    # # DEMAND
+    #=------------------------------------------------------------------------------
+    DEMAND
+    ------------------------------------------------------------------------------=#
     # # demand data in each nodes
     # # full run
     # Eldemand_data = demand.el
@@ -48,10 +50,18 @@ Return
     Heatdemand_data = demand.heat[1:12, :]
     H2demand_data = demand.h2[1:12, :]
 
+    #=------------------------------------------------------------------------------
+    PRICES
+    ------------------------------------------------------------------------------=#
     # electricity price SE3 in €/MWh 
     El_price = price.el.elpris         
 
-    # TECH PROPS
+    # heat and hydrogen market price?
+    # fuel price? 
+
+    #=------------------------------------------------------------------------------
+    GENERATION AND STORAGE TECHNOLOGY PROPERTIES
+    ------------------------------------------------------------------------------=#
     # Dict of tech properties, keys are tech names, values are properties in df format
     # based on Danish Energy Agency catalogues
     # https://ens.dk/en/our-services/technology-catalogues/technology-data-generation-electricity-and-district-heating
@@ -62,27 +72,36 @@ Return
     Gentech_data = Dict(tech_props.gen[:, :Tech] .=> eachrow(tech_props.gen[:, Not(:Tech)]))
     Stotech_data = Dict(tech_props.sto[:, :Tech] .=> eachrow(tech_props.sto[:, Not(:Tech)]))
 
-    # DISCOUNT RATE
+    #=------------------------------------------------------------------------------
+    DISCOUNT RATE
+    ------------------------------------------------------------------------------=#
     # assumed discount rate
     Discount_rate = 0.05
 
-    # POWER FACTOR
+    #=------------------------------------------------------------------------------
+    POWER FACTOR
+    ------------------------------------------------------------------------------=#
     # Power factor assumptions
     Gen_cos_ϕ = [0.8, 1]                            # assumed power factor operation bounds of generation
     Gen_sin_ϕ = sqrt.(1 .- Gen_cos_ϕ.^2)
     Demand_cos_ϕ = 0.95                             # assumed load power factor
     Demand_sin_ϕ = sqrt.(1 .- Demand_cos_ϕ.^2)
     
-    # POWER LINES
+    #=------------------------------------------------------------------------------
+    POWER LINES PROPERTIES
+    ------------------------------------------------------------------------------=#
+    # Extract power lines sets
+    # and properties
     lines_df, Ybus, G_Ybus, B_Ybus = lines_props(grid_infra.lines)
     LINES_SETS, Lines_props = arcs_prep(lines_df)
 
     @unpack LINES, 
             NODE_FROM, 
-            NODE_TO, 
-            ARCS_FR,
-            ARCS_TO = LINES_SETS
+            NODE_TO = LINES_SETS
 
+    #=------------------------------------------------------------------------------
+    VOLTAGE AND LINEARISING PARAMETERS
+    ------------------------------------------------------------------------------=#
     # Voltage nominal
     Vnom = 130              # kV
     τ = [1, -1]             # power flow linearising parameters
@@ -91,14 +110,18 @@ Return
     MODEL SETS
     ------------------------------------------------------------------------------=#
 
-    # Main Sets    
+    #=------------------------------------------------------------------------------
+    MAIN SETS
+    ------------------------------------------------------------------------------=#  
     NODES = grid_infra.subs[:, :node_id]        # node set
     GEN_TECHS = tech_props.gen[:, :Tech]        # generation tech set
     STO_TECHS = tech_props.sto[:, :Tech]        # storage tech set
-    PERIODS = demand.el[1:12, :hour]            # time period set (hourly), trial runs
     # PERIODS = demand.el[:, :hour]               # time period set (hourly), full run
+    PERIODS = demand.el[1:12, :hour]            # time period set (hourly), trial runs
 
-    # Subsets
+    #=------------------------------------------------------------------------------
+    SUBSETS
+    ------------------------------------------------------------------------------=#     
     # Coastal municipalities
     # for offshore wind eligibility
     # Strömstad
@@ -139,17 +162,24 @@ Return
         "STR3",     # 28
     ]
 
+    #=------------------------------------------------------------------------------
+    GENERATION TECHNOLOGY SUBSETS
+    ------------------------------------------------------------------------------=# 
     # carrier generation technologies subset
     EL_GEN, HEAT_GEN, H2_GEN = carrier_subsets(tech_props.gen) 
 
     # carrier storage technologies subset
     EL_STO, HEAT_STO, H2_STO = carrier_subsets(tech_props.sto)    
 
-    # transmission node subset
+    #=------------------------------------------------------------------------------
+    TRANSMISSION NODES SUBSETS
+    ------------------------------------------------------------------------------=# 
     trans_node = filter(row -> row.import_trans == true, grid_infra.subs)    
     TRANSMISSION_NODES = trans_node.node_id
 
-    # tech-specific subsets
+    #=------------------------------------------------------------------------------
+    SPECIFIC TECHNOLOGY SUBSETS
+    ------------------------------------------------------------------------------=# 
     # manually defined from excel file input
     CHP = [             # CHP
             "COCHP",    # coal chp
@@ -222,8 +252,6 @@ Return
             LINES, 
             NODE_FROM, 
             NODE_TO, 
-            ARCS_FR,
-            ARCS_TO,
             CHP,
             FC,
             WIND,

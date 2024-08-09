@@ -34,8 +34,6 @@ current variables:
             LINES, 
             NODE_FROM, 
             NODE_TO, 
-            ARCS_FR,
-            ARCS_TO,
             CHP,
             FC,
             WIND,
@@ -67,11 +65,15 @@ current variables:
     # Objective function, free variable
     @variable(model, total_cost)
 
+    #=------------------------------------------------------------------------------
+    GENERATION AND STORAGE VARIABLES
+    ------------------------------------------------------------------------------=#
+    # EQ (2) - (7) #
     # Generation and Storage Capacities (MW)
     # upper and lower bounds for generation capaicity is defined in set_gen_bounds function
     @variables model begin
-        generation_capacity[i ∈ NODES, x ∈ GEN_TECHS]   ≥ 0 # ≤ 9999
-        storage_capacity[i ∈ NODES, s ∈ STO_TECHS]      ≥ 0 # ≤ 9999
+        generation_capacity[i ∈ NODES, x ∈ GEN_TECHS]   ≥ 0
+        storage_capacity[i ∈ NODES, s ∈ STO_TECHS]      ≥ 0
     end
     
     # Active and Reactive power dispatch (MWh or MVArh)
@@ -94,7 +96,16 @@ current variables:
         end
     end
 
-    # variables for the two-variables approach
+    # Storage-related variables (MWh)
+    @variables model begin
+        storage_charge[i ∈ NODES, s ∈ STO_TECHS, t ∈ PERIODS]     ≥ 0
+        storage_discharge[i ∈ NODES, s ∈ STO_TECHS, t ∈ PERIODS]  ≥ 0
+        storage_level[i ∈ NODES, s ∈ STO_TECHS, t ∈ PERIODS]      ≥ 0
+    end
+
+    #=------------------------------------------------------------------------------
+    TWO-VARIABLE APPROACH VARIABLES
+    ------------------------------------------------------------------------------=#
     # applies to thermal power plants
     # related to start up / ramping limits
     # based on Lisa's thesis
@@ -107,31 +118,11 @@ current variables:
         gen_partload_CO2[i ∈ NODES, x ∈ FLEX_TH, t ∈ PERIODS]     ≥ 0
     end
 
-
-    # Storage-related variables (MWh)
-    @variables model begin
-        storage_charge[i ∈ NODES, s ∈ STO_TECHS, t ∈ PERIODS]     ≥ 0
-        storage_discharge[i ∈ NODES, s ∈ STO_TECHS, t ∈ PERIODS]  ≥ 0
-        storage_level[i ∈ NODES, s ∈ STO_TECHS, t ∈ PERIODS]      ≥ 0
-    end
-
-    # voltage nominal and angles (in kV for voltage magnitude, degree for angle)
-    @variables model begin
-        nodal_voltage[i ∈ NODES, t ∈ PERIODS] ≥ 0.9 * Vnom, (upper_bound=1.1 * Vnom) 
-        nodal_angle[i ∈ NODES, t ∈ PERIODS]
-    end
-
-    # Slack bus voltage and angle over time, assume the first entry as slack
-    @constraint(model, 
-        Slack_Voltage[t ∈ PERIODS],
-            nodal_voltage[NODES[1], t] == Vnom
-    )
-
-    @constraint(model, 
-        Slack_Angle[t ∈ PERIODS],
-            nodal_angle[NODES[1], t] == 0
-    )
-
+    #=------------------------------------------------------------------------------
+    EXPORT - IMPORT VARIABLES
+    EQ (38)
+    ------------------------------------------------------------------------------=#
+    # EQ (33) - (35) #
     # export and import to/from transmission system
     # ideally limited by transformer size (200 - 300 MVA would be reasonable for transmission transformer)
     # and perhaps trading regulations?
@@ -149,9 +140,34 @@ current variables:
                 Trade[i ∈ TRANSMISSION_NODES, t ∈ PERIODS],
                 import_export[i,t] == import_from[i,t] - export_to[i,t]
     )
-    
-    # power flow variables, applied to lines and node from/to sets
-    # since the flow can only be exist within power lines
+
+    #=------------------------------------------------------------------------------
+    VOLTAGE VARIABLES
+    EQ (38)
+    ------------------------------------------------------------------------------=#
+    # voltage nominal and angles (in kV for voltage magnitude, degree for angle)
+    @variables model begin
+        0.9 * Vnom ≤ nodal_voltage[i ∈ NODES, t ∈ PERIODS] ≤ 1.1 * Vnom 
+        nodal_angle[i ∈ NODES, t ∈ PERIODS]
+    end
+
+    # Slack bus voltage and angle over time, assume the first entry as slack
+    @constraint(model, 
+        Slack_Voltage[t ∈ PERIODS],
+            nodal_voltage[NODES[1], t] == Vnom
+    )
+
+    @constraint(model, 
+        Slack_Angle[t ∈ PERIODS],
+            nodal_angle[NODES[1], t] == 0
+    )    
+
+    #=------------------------------------------------------------------------------
+    POWER FLOW VARIABLES
+    EQ (40) - (41)
+    ------------------------------------------------------------------------------=#
+    # applied to lines and node from/to sets
+    # since the flow can only be exist in power lines
     # but nodes still need to be taken into account
     # refer to Allard et el. (2020) eq. (4) - (7)
     # https://doi.org/10.1016/j.apenergy.2020.114958
@@ -160,7 +176,7 @@ current variables:
     @variables model begin
         -Lines_props[l][:s_max] ≤ active_flow[l ∈ LINES, t ∈ PERIODS]     ≤ Lines_props[l][:s_max]
         -Lines_props[l][:s_max] ≤ reactive_flow[l ∈ LINES, t ∈ PERIODS]   ≤ Lines_props[l][:s_max]
-   end
+    end
 
     #=------------------------------------------------------------------------------
     Return
@@ -192,7 +208,7 @@ current variables:
 
     return Vars
 
-end
+end         # end make_Variables
 
 
 function make_Constraints(
@@ -234,8 +250,6 @@ current constraints:
             LINES, 
             NODE_FROM, 
             NODE_TO, 
-            ARCS_FR,
-            ARCS_TO,
             CHP,
             FC,
             WIND,
@@ -288,6 +302,76 @@ current constraints:
     MODEL CONSTRAINTS
     ------------------------------------------------------------------------------=#
 
+    #=------------------------------------------------------------------------------
+    OBJECTIVES
+    EQ (1)
+    ------------------------------------------------------------------------------=#
+
+    # define investments of technologies
+    # capacity substracted by the lower_bound, which is the acquired existing data
+    @expressions model begin
+        CRF_gen[x in GEN_TECHS],
+            Discount_rate / (1 - 1/(1+Discount_rate)^Gentech_data[x].Lifetime)
+
+        CRF_sto[s in STO_TECHS],
+            Discount_rate / (1 - 1/(1+Discount_rate)^Stotech_data[s].Lifetime)
+    end
+
+    @expressions model begin
+        generation_investment[i ∈ NODES, x ∈ GEN_TECHS],
+            generation_capacity[i, x] - lower_bound(generation_capacity[i, x])
+
+        storage_investment[i ∈ NODES, s ∈ STO_TECHS],
+            storage_capacity[i, s] - lower_bound(storage_capacity[i, s])
+    end
+
+    @constraint(model, SystemCost,
+        total_cost ==
+        # generation techs capacity investment costs
+        sum(generation_investment[i, x] * Gentech_data[x].InvCost * CRF_gen[x] for i ∈ NODES, x ∈ GEN_TECHS) +                                          
+        
+        # storage techs capacity investment costs
+        sum(storage_investment[i, s] * Stotech_data[s].InvCost * CRF_sto[s] for i ∈ NODES, s ∈ STO_TECHS) +                                             
+        
+        # generation tech fix O&M costs, electrolyser defined differently since the fix OM is based on % of invesment
+        sum(generation_investment[i, x] * Gentech_data[x].FixOM for i in NODES, x ∈ GEN_TECHS if x ∉ EC ) +                                              
+        
+        # generation tech fix O&M costs for electrolyser
+        sum((generation_investment[i, x] * Gentech_data[x].InvCost * CRF_gen[x]) * Gentech_data[x].FixOM for i ∈ NODES, x ∈ GEN_TECHS if x ∈ EC ) +    
+        
+        # storage tech fix O&M costs, vanadium redox defined differently since the fix OM is based on % of investment
+        sum(storage_investment[i, s] * Stotech_data[s].FixOM for i ∈ NODES, s ∈ STO_TECHS if s != "VRBAT") +                                            
+        
+        # storage tech fix O&M costs for vanadium redox
+        sum((storage_investment[i, s] * Stotech_data[s].InvCost * CRF_sto[s]) * Stotech_data[s].FixOM for i ∈ NODES, s ∈ STO_TECHS if s == "VRBAT") +
+        
+        # operational costs for techs that use fuel 
+        sum( sum(active_generation[i, x, t] * Gentech_data[x].FuelCost / 1e6 for i ∈ NODES, x ∈ GEN_TECHS if x ∉ [HP, EC, "EB"] ) for t ∈ PERIODS) +
+        
+        # operational costs for HP and electrolyser uses elprice
+        sum( sum(active_generation[i, x, t] * El_price[t] / 1e6 for i ∈ NODES, x ∈ GEN_TECHS if x ∈ [HP, EC, "EB"] ) for t ∈ PERIODS) +
+
+        # generation tech variable O&M costs
+        sum(active_generation[i, x, t] * Gentech_data[x].VarOM for i ∈ NODES, x ∈ GEN_TECHS, t ∈ PERIODS) +                                             
+        
+        # storage tech variable O&M costs 
+        sum(storage_discharge[i, s, t] * Stotech_data[s].VarOM for i ∈ NODES, s ∈ STO_TECHS, t ∈ PERIODS) +                                            
+        
+        # startup costs
+        sum(gen_startup_cost[i, x, t] for i ∈ NODES, x ∈ FLEX_TH, t ∈ PERIODS) +
+
+        # partload costs
+        sum(gen_partload_cost[i, x, t] for i ∈ NODES, x ∈ FLEX_TH, t ∈ PERIODS) +
+
+        # export/import from transmission system
+        sum(i ∈ TRANSMISSION_NODES ? import_from[i, t] * El_price[t] / 1e6 : 0 for i ∈ NODES, t ∈ PERIODS)                                                 
+                                                                                                                                                        # TODO: taxes?
+    )
+
+    #=------------------------------------------------------------------------------
+    GENERATION LIMITS
+    EQ (9) - (11)
+    ------------------------------------------------------------------------------=#
     # general active and reactive generation limited by respective capacities
     # reactive generation is limited by the power factor relationship between active - reactive
     # reactive generation is assumed only applies for electricity generation technologies
@@ -354,6 +438,10 @@ current constraints:
         vars,
         )
 
+    #=------------------------------------------------------------------------------
+    STORAGE BALANCE LIMITS
+    EQ (12) - (23)
+    ------------------------------------------------------------------------------=#
     # storage-related constraints
     # Current initial storage level assumed to be 0
     initSto = zeros(length(NODES), length(STO_TECHS))#, length(PERIODS))
@@ -382,7 +470,9 @@ current constraints:
         #TODO: losses in the storage? thermal, battery capacity, etc.?
     end
 
-    # NODAL ENERGY BALANCES
+    #=------------------------------------------------------------------------------
+    NODAL ENERGY BALANCES
+    ------------------------------------------------------------------------------=#
     # Electricity nodal balance
     for (idx, node) ∈ enumerate(NODES), t ∈ PERIODS
         # Assuming the reactive demand corresponds to 0.95 cos phi
@@ -396,6 +486,7 @@ current constraints:
         q_enter = sum(reactive_flow[line, t] for (idx, line) ∈ enumerate(LINES) if NODE_TO[idx] == node; init=0)
         q_exit = sum(reactive_flow[line, t] for (idx, line) ∈ enumerate(LINES) if NODE_FROM[idx] == node; init=0)
 
+        # EQ (31) #
         # active power nodal balance
         @constraint(model, 
             Eldemand_data[t, node] +                                                                                # el demand
@@ -413,6 +504,7 @@ current constraints:
             (node in TRANSMISSION_NODES ? import_export[node, t] : 0)                                               # import/export
         )
         
+        # EQ (32) #
         # reactive power nodal balance     
         @constraint(model, 
             Reactive_Demand[t, node] +                                                  # reactive demand
@@ -423,6 +515,7 @@ current constraints:
         )
     end
 
+    # EQ (28) - (29) #
     # Heat nodal balance
     for (_, node) ∈ enumerate(NODES), t ∈ PERIODS
         # heat pipe flow equations would come here if there is any...
@@ -438,6 +531,7 @@ current constraints:
         )
     end
 
+    # EQ (30) #
     # H2 nodal balance
     for (_, node) ∈ enumerate(NODES), t ∈ PERIODS
         # H2 pipe flow equations would come here if there is any...
@@ -451,17 +545,9 @@ current constraints:
         )
     end
 
-    # CO2 limits and constraints
-    # 2050 assumes net zero is achieved
-    @constraint(model,
-        sum(active_generation[i, x, t] * Gentech_data[x].CO2_factor for i ∈ NODES, x ∈ GEN_TECHS, t ∈ PERIODS) + 
-        sum(storage_discharge[i, s, t] * Stotech_data[s].CO2_factor for i ∈ NODES, s ∈ STO_TECHS, t ∈ PERIODS) +
-        sum(gen_startup_CO2[i, x, t] for i ∈ NODES, x ∈ FLEX_TH, t ∈ PERIODS) +
-        sum(gen_partload_CO2[i, x, t] for i ∈ NODES, x ∈ FLEX_TH, t ∈ PERIODS) ==
-        0                                                                                       
-    )
-
-    # power flow linearised thermal constraint
+    #=------------------------------------------------------------------------------
+    LINEARISED POWER FLOW LIMITS
+    ------------------------------------------------------------------------------=#
     # refer to Allard et el. (2020) eq. (8)
     # https://doi.org/10.1016/j.apenergy.2020.114958
     # apparent power limits have been defined in Variables - power flow variables
@@ -470,6 +556,7 @@ current constraints:
         G = Lines_props[line][:g_total]
         B = Lines_props[line][:b_total]
 
+        # EQ (36) - (37) #
         # active flow
         @constraint(model,
             active_flow[line, t] == Vnom * (G * (nodal_voltage[NODE_FROM[idx], t] - nodal_voltage[NODE_TO[idx], t]) + 
@@ -491,6 +578,7 @@ current constraints:
             nodal_voltage[NODE_FROM[idx], t] - nodal_voltage[NODE_TO[idx], t] ≥ 0
         )
 
+        # EQ (42) #
         # linearised thermal constraints
         @constraint(model,
             τ[1] * active_flow[line, t] + τ[1] * reactive_flow[line, t] ≤ sqrt(2) * Lines_props[line][:s_max]
@@ -509,72 +597,21 @@ current constraints:
         )
     end
 
-
-    # Objective
-
-    # define investments of technologies
-    # capacity substracted by the lower_bound, which is the acquired existing data
-    @expressions model begin
-        CRF_gen[x in GEN_TECHS],
-            Discount_rate / (1 - 1/(1+Discount_rate)^Gentech_data[x].Lifetime)
-
-        CRF_sto[s in STO_TECHS],
-            Discount_rate / (1 - 1/(1+Discount_rate)^Stotech_data[s].Lifetime)
-    end
-
-    @expressions model begin
-        generation_investment[i ∈ NODES, x ∈ GEN_TECHS],
-            generation_capacity[i, x] - lower_bound(generation_capacity[i, x])
-
-        storage_investment[i ∈ NODES, s ∈ STO_TECHS],
-            storage_capacity[i, s] - lower_bound(storage_capacity[i, s])
-    end
-
-    # @objective(model, Min,
-    @constraint(model, SystemCost,
-        total_cost ==
-        # generation techs capacity investment costs
-        sum(generation_investment[i, x] * Gentech_data[x].InvCost * CRF_gen[x] for i ∈ NODES, x ∈ GEN_TECHS) +                                          
-        
-        # storage techs capacity investment costs
-        sum(storage_investment[i, s] * Stotech_data[s].InvCost * CRF_sto[s] for i ∈ NODES, s ∈ STO_TECHS) +                                             
-        
-        # generation tech fix O&M costs, electrolyser defined differently since the fix OM is based on % of invesment
-        sum(generation_investment[i, x] * Gentech_data[x].FixOM for i in NODES, x ∈ GEN_TECHS if x ∉ EC ) +                                              
-        
-        # generation tech fix O&M costs for electrolyser
-        sum((generation_investment[i, x] * Gentech_data[x].InvCost * CRF_gen[x]) * Gentech_data[x].FixOM for i ∈ NODES, x ∈ GEN_TECHS if x ∈ EC ) +    
-        
-        # storage tech fix O&M costs, vanadium redox defined differently since the fix OM is based on % of investment
-        sum(storage_investment[i, s] * Stotech_data[s].FixOM for i ∈ NODES, s ∈ STO_TECHS if s != "VRBAT") +                                            
-        
-        # storage tech fix O&M costs for vanadium redox
-        sum((storage_investment[i, s] * Stotech_data[s].InvCost * CRF_sto[s]) * Stotech_data[s].FixOM for i ∈ NODES, s ∈ STO_TECHS if s == "VRBAT") +
-        
-        # operational costs for techs that use fuel 
-        sum( sum(active_generation[i, x, t] * Gentech_data[x].FuelCost / 1e6 for i ∈ NODES, x ∈ GEN_TECHS if x ∉ [HP, EC, "EB"] ) for t ∈ PERIODS) +
-        
-        # operational costs for HP and electrolyser uses elprice
-        sum( sum(active_generation[i, x, t] * El_price[t] / 1e6 for i ∈ NODES, x ∈ GEN_TECHS if x ∈ [HP, EC, "EB"] ) for t ∈ PERIODS) +
-
-        # generation tech variable O&M costs
-        sum(active_generation[i, x, t] * Gentech_data[x].VarOM for i ∈ NODES, x ∈ GEN_TECHS, t ∈ PERIODS) +                                             
-        
-        # storage tech variable O&M costs 
-        sum(storage_discharge[i, s, t] * Stotech_data[s].VarOM for i ∈ NODES, s ∈ STO_TECHS, t ∈ PERIODS) +                                            
-        
-        # startup costs
-        sum(gen_startup_cost[i, x, t] for i ∈ NODES, x ∈ FLEX_TH, t ∈ PERIODS) +
-
-        # partload costs
-        sum(gen_partload_cost[i, x, t] for i ∈ NODES, x ∈ FLEX_TH, t ∈ PERIODS) +
-
-        # export/import from transmission system
-        sum(i ∈ TRANSMISSION_NODES ? import_from[i, t] * El_price[t] / 1e6 : 0 for i ∈ NODES, t ∈ PERIODS)                                                 
-                                                                                                                                                        # TODO: taxes?
+    #=------------------------------------------------------------------------------
+    CO2 LIMITS
+    EQ (43)
+    ------------------------------------------------------------------------------=#
+    # CO2 limits and constraints
+    # 2050 assumes net zero is achieved
+    @constraint(model,
+        sum(active_generation[i, x, t] * Gentech_data[x].CO2_factor for i ∈ NODES, x ∈ GEN_TECHS, t ∈ PERIODS) + 
+        sum(storage_discharge[i, s, t] * Stotech_data[s].CO2_factor for i ∈ NODES, s ∈ STO_TECHS, t ∈ PERIODS) +
+        sum(gen_startup_CO2[i, x, t] for i ∈ NODES, x ∈ FLEX_TH, t ∈ PERIODS) +
+        sum(gen_partload_CO2[i, x, t] for i ∈ NODES, x ∈ FLEX_TH, t ∈ PERIODS) ==
+        0                                                                                       
     )
 
-end
+end     # end make_Constraints
 
 
 function set_gen_bounds(
@@ -613,13 +650,13 @@ function set_gen_bounds(
 
     # empty dict and loop over the bounds    
     capacity_lower_bounds = Dict{Tuple{String, String}, Float64}()
-    for row in eachrow(aggregated_pp_df)
+    for row ∈ eachrow(aggregated_pp_df)
         capacity_lower_bounds[(row.node_id, row.tech)] = row.sum_MW
     end
 
     # define the lower bounds
     # set 0 as default value if no values are assigned
-    for (_, node) in enumerate(NODES), (_, tech) in enumerate(GEN_TECHS)
+    for (_, node) ∈ enumerate(NODES), (_, tech) ∈ enumerate(GEN_TECHS)
         set_lower_bound(generation_capacity[node, tech], get(capacity_lower_bounds, (node, tech), 0.0))
     end
 
@@ -627,17 +664,19 @@ function set_gen_bounds(
     GENERATION UPPER BOUNDS
     ------------------------------------------------------------------------------=#
 
+    # EQ (8) #
     # limits of area for each node based on Voronoi cell
-    node_area = Dict(row.node_id => row.area_m2 for row in eachrow(grid_infra.subs))
+    node_area = Dict(row.node_id => row.area_m2 for row ∈ eachrow(grid_infra.subs))
 
-    for (_, node) in enumerate(NODES)
+    for (_, node) ∈ enumerate(NODES)
         @constraint(model,
-            sum(generation_capacity[node, gen_tech] * Gentech_data[gen_tech].Space_m2 for gen_tech in GEN_TECHS) +
-            sum(storage_capacity[node, sto_tech] * Stotech_data[sto_tech].Space_m2 for sto_tech in STO_TECHS) ≤ 
+            sum(generation_capacity[node, gen_tech] * Gentech_data[gen_tech].Space_m2 for gen_tech ∈ GEN_TECHS) +
+            sum(storage_capacity[node, sto_tech] * Stotech_data[sto_tech].Space_m2 for sto_tech ∈ STO_TECHS) ≤ 
             node_area[node]
         )
     end
-end
+    
+end         # end set_gen_bounds
 
 
 function flex_lim(
@@ -676,6 +715,10 @@ related to the two-variable approach:
             gen_startup_CO2,
             gen_partload_CO2 = vars
 
+    #=------------------------------------------------------------------------------
+    TWO-VARIABLE APPROACH CONSTRAINTS
+    EQ (24) - (27)
+    ------------------------------------------------------------------------------=#
     # maximum gen bounded by available "hot capacity" (spin)
     @constraint(model, Spin_lim[i ∈ NODES, x ∈ FLEX_TH, t ∈ PERIODS],
         generation_spin[i, x, t] ≤ generation_capacity[i, x]
@@ -718,9 +761,7 @@ related to the two-variable approach:
 
     # Ramping limits
     # should apply when the period is longer than a day
-
     if size(PERIODS, 1) ≥ 12
-
         # new tech sets based on the start up time duration
         # defined manually based on data in excel
 
@@ -767,7 +808,6 @@ related to the two-variable approach:
             generation_on[i, x, t] ≤ 
             generation_capacity[i, x] - generation_spin[i, x, t-12]
         )
-
     end
 
-end
+end         # end flex_lim

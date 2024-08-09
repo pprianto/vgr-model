@@ -21,7 +21,7 @@ include("rm_Params_Sets.jl")
 include("rm_Vars_Consts.jl")
 include("rm_Model.jl")
 
-
+# Set directory
 current_dir = pwd()
 input_dir = joinpath(current_dir, "modelinput")
 
@@ -32,25 +32,22 @@ INPUT DATA
 # electricity price
 elpris_df = read_file(joinpath(input_dir, "elpris_.xlsx"))
 
-
 # electrical infrastructure
 substations_df = read_file(joinpath(input_dir, "subs_final.csv"))
 lines_df = read_file(joinpath(input_dir, "lines_final.csv"))
 pp_df = read_file(joinpath(input_dir, "pp_final.csv"))
-pp_df = rename_pp(pp_df)                                            # rename the tech according to the tech props
+pp_df = rename_pp(pp_df)                                                                    # rename the tech according to the tech props
 
 # technology properties
 # assume 2050
 gen_tech_df = read_file(joinpath(input_dir, "gen_tech_2050.xlsx"))
 sto_tech_df = read_file(joinpath(input_dir, "sto_tech_2050.xlsx"))
 
-
 # demand data
 # currently in hourly period
 el_demand_df = read_file(joinpath(input_dir, "el_nodal_demand.csv"))
 heat_demand_df = read_file(joinpath(input_dir, "heat_nodal_demand.csv"))
 h2_demand_df = read_file(joinpath(input_dir, "h2_nodal_demand.csv"))
-
 
 # RE profile
 PV_fix_profile = read_file(joinpath(input_dir, "nodal_profile_pv_fixed_2019.csv"))          # fixed axis pv
@@ -65,7 +62,9 @@ tech_props = (; gen=gen_tech_df, sto=sto_tech_df)
 demand = (; el=el_demand_df, heat=heat_demand_df, h2=h2_demand_df)
 profiles = (; PVfix=PV_fix_profile, PVopt=PV_opt_profile, WTon=WT_on_profile, WToff=WT_off_profile)
 
-# initiate model
+#=---------------------------------------------
+INITIATE MODEL
+---------------------------------------------=#
 model = Model(Gurobi.Optimizer)
 # set_attribute(model, "Presolve", 0)
 # set_optimizer_attribute(model, "NumericFocus", 2)

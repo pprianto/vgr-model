@@ -52,7 +52,7 @@ Read either xls or csv file as dataframe
         df = CSV.read(file_path, DataFrame)
     
     else
-        error("Unsupported file format. Please provide an XLS or CSV file.")
+        error("Unsupported file format. Please provide XLS or CSV file.")
     
     end
     
