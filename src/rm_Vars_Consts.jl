@@ -55,8 +55,7 @@ current variables:
             Demand_cos_ϕ, 
             Demand_sin_ϕ, 
             Lines_props,
-            Vnom, 
-            τ, = params
+            Vnom = params
 
     #=------------------------------------------------------------------------------
     MODEL VARIABLES
@@ -81,19 +80,6 @@ current variables:
     @variables model begin
         active_generation[i ∈ NODES, x ∈ GEN_TECHS, t ∈ PERIODS]  ≥ 0
         reactive_generation[i ∈ NODES, x ∈ EL_GEN, t ∈ PERIODS]   ≥ 0
-    end
-
-    # nodes not in coastal municipalities not eligible for offshore wind farms
-    for (_, node) ∈ enumerate(NODES), t ∈ PERIODS
-        if node ∉ COAST_NODES
-            @constraint(model, 
-                generation_capacity[node, "WOFF"] == 0
-            )
-
-            @constraint(model, 
-                active_generation[node, "WOFF", t] == 0
-            )
-        end
     end
 
     # Storage-related variables (MWh)
@@ -146,6 +132,7 @@ current variables:
     EQ (38)
     ------------------------------------------------------------------------------=#
     # voltage nominal and angles (in kV for voltage magnitude, degree for angle)
+    # first nodes is excluded since it is considered slack bus
     @variables model begin
         0.9 * Vnom ≤ nodal_voltage[i ∈ NODES, t ∈ PERIODS] ≤ 1.1 * Vnom 
         nodal_angle[i ∈ NODES, t ∈ PERIODS]
@@ -271,8 +258,7 @@ current constraints:
             Demand_cos_ϕ, 
             Demand_sin_ϕ, 
             Lines_props,
-            Vnom, 
-            τ = params
+            Vnom = params
 
     ## Variables
 
@@ -310,10 +296,10 @@ current constraints:
     # define investments of technologies
     # capacity substracted by the lower_bound, which is the acquired existing data
     @expressions model begin
-        CRF_gen[x in GEN_TECHS],
+        CRF_gen[x ∈ GEN_TECHS],
             Discount_rate / (1 - 1/(1+Discount_rate)^Gentech_data[x].Lifetime)
 
-        CRF_sto[s in STO_TECHS],
+        CRF_sto[s ∈ STO_TECHS],
             Discount_rate / (1 - 1/(1+Discount_rate)^Stotech_data[s].Lifetime)
     end
 
@@ -343,7 +329,7 @@ current constraints:
         sum(storage_investment[i, s] * Stotech_data[s].FixOM for i ∈ NODES, s ∈ STO_TECHS if s != "VRBAT") +                                            
         
         # storage tech fix O&M costs for vanadium redox
-        sum((storage_investment[i, s] * Stotech_data[s].InvCost * CRF_sto[s]) * Stotech_data[s].FixOM for i ∈ NODES, s ∈ STO_TECHS if s == "VRBAT") +
+        sum((storage_investment[i, "VRBAT"] * Stotech_data["VRBAT"].InvCost * CRF_sto["VRBAT"]) * Stotech_data["VRBAT"].FixOM for i ∈ NODES) +
         
         # operational costs for techs that use fuel 
         sum( sum(active_generation[i, x, t] * Gentech_data[x].FuelCost / 1e6 for i ∈ NODES, x ∈ GEN_TECHS if x ∉ [HP, EC, "EB"] ) for t ∈ PERIODS) +
@@ -375,9 +361,10 @@ current constraints:
     # general active and reactive generation limited by respective capacities
     # reactive generation is limited by the power factor relationship between active - reactive
     # reactive generation is assumed only applies for electricity generation technologies
+    # Wind, PV, FLEX_TH are excluded because they are defined differently
     @constraints model begin
         # active power generation
-        Active_Generation_Limit[i ∈ NODES, x ∈ GEN_TECHS, t ∈ PERIODS],
+        Active_Generation_Limit[i ∈ NODES, x ∈ GEN_TECHS, t ∈ PERIODS; x != [WIND, PV, FLEX_TH]],
             active_generation[i, x, t] ≤ generation_capacity[i, x]
             
         # lower bound of reactive generation
@@ -408,24 +395,23 @@ current constraints:
     # based on Renewables Ninja profile
     @constraints model begin
         # offshore wind
-        WOFF_Gen_Limit[i ∈ COAST_NODES, x ∈ EL_GEN, t ∈ PERIODS; x == "WOFF"],
+        WOFF_Gen_Limit[i ∈ COAST_NODES, x ∈ WIND, t ∈ PERIODS; x == "WOFF"],
             active_generation[i, x, t] ≤ profiles.WToff[t, i] * generation_capacity[i, x]
-            # active_generation[i, x, t] ≤ WT_off_profile[t, i] * generation_capacity[i, x]
-
+            
         # onshore wind
-        WON_Gen_Limit[i ∈ NODES, x ∈ EL_GEN, t ∈ PERIODS; x == "WON"],
+        WON_Gen_Limit[i ∈ NODES, x ∈ WIND, t ∈ PERIODS; x == "WON"],
             active_generation[i, x, t] ≤ profiles.WTon[t, i] * generation_capacity[i, x]
 
         # rooftop pv
-        PV_roof_Limit[i ∈ NODES, x ∈ EL_GEN, t ∈ PERIODS; x == "PVROOF"],
+        PV_roof_Limit[i ∈ NODES, x ∈ PV, t ∈ PERIODS; x == "PVROOF"],
             active_generation[i, x, t] ≤ profiles.PVfix[t, i] * generation_capacity[i, x]
 
         # utility pv
-        PV_util_Limit[i ∈ NODES, x ∈ EL_GEN, t ∈ PERIODS; x == "PVUTIL"],
+        PV_util_Limit[i ∈ NODES, x ∈ PV, t ∈ PERIODS; x == "PVUTIL"],
             active_generation[i, x, t] ≤ profiles.PVfix[t, i] * generation_capacity[i, x]
 
         # tracking pv
-        PV_track_Limit[i ∈ NODES, x ∈ EL_GEN, t ∈ PERIODS; x == "PVTRACK"],
+        PV_track_Limit[i ∈ NODES, x ∈ PV, t ∈ PERIODS; x == "PVTRACK"],
             active_generation[i, x, t] ≤ profiles.PVopt[t, i] * generation_capacity[i, x]
     end
 
@@ -474,7 +460,7 @@ current constraints:
     NODAL ENERGY BALANCES
     ------------------------------------------------------------------------------=#
     # Electricity nodal balance
-    for (idx, node) ∈ enumerate(NODES), t ∈ PERIODS
+    for node ∈ NODES, t ∈ PERIODS
         # Assuming the reactive demand corresponds to 0.95 cos phi
         Reactive_Demand = Eldemand_data .* Demand_sin_ϕ ./ Demand_cos_ϕ 
 
@@ -490,16 +476,15 @@ current constraints:
         # active power nodal balance
         @constraint(model, 
             Eldemand_data[t, node] +                                                                                # el demand
-            sum(active_generation[node, x, t] / Gentech_data[x].Efficiency for x ∈ GEN_TECHS if x ∈ HP) +           # for HP
-            sum(active_generation[node, x, t] / Gentech_data[x].Efficiency for x ∈ GEN_TECHS if x ∈ BOILER) +       # for boilers
-            sum(active_generation[node, x, t] for x ∈ GEN_TECHS if x ∈ EC) +                                        # for electrolyser / H2 demand
-            sum(storage_charge[node, s, t] for s ∈ STO_TECHS if s ∈ EL_STO) +                                       # charge battery
-            sum(storage_charge[node, s, t] for s ∈ STO_TECHS if s ∈ H2_STO) +                                       # charge  h2 storage
+            sum(active_generation[node, x, t] / Gentech_data[x].Efficiency for x ∈ HP) +                            # for HP
+            sum(active_generation[node, x, t] / Gentech_data[x].Efficiency for x ∈ BOILER) +                        # for boilers
+            sum(active_generation[node, x, t] for x ∈ EC) +                                                         # for electrolyser / H2 demand
+            sum(storage_charge[node, s, t] for s ∈ EL_STO) +                                                        # charge battery
+            sum(storage_charge[node, s, t] for s ∈ H2_STO) +                                                        # charge  h2 storage
             p_exit ≤                                                                                                # el flow to other nodes
-            sum(active_generation[node, x, t] * Gentech_data[x].Efficiency for x ∈ GEN_TECHS if x ∈ EL_GEN) +       # el generation (active)
-            # sum(active_generation[node, x, t] * Gentech_data[x].Efficiency for x ∈ GEN_TECHS if x ∈ CHP) +        # for CHP, already included in EL_GEN?
-            sum(storage_discharge[node, s, t] for s ∈ STO_TECHS if s ∈ EL_STO) +                                    # battery discharge
-            # sum(active_generation[node, x, t] for x ∈ GEN_TECHS if x ∈ H2_GEN) +                                  # this applies for Fuel Cell (H2 -> EL)
+            sum(active_generation[node, x, t] * Gentech_data[x].Efficiency for x ∈ EL_GEN) +                        # el generation (active)
+            sum(storage_discharge[node, s, t] for s ∈ EL_STO) +                                                     # battery discharge
+            sum(active_generation[node, x, t] for x ∈ FC) +                                  # this applies for Fuel Cell (H2 -> EL)
             p_enter +                                                                                               # el flow to this node
             (node in TRANSMISSION_NODES ? import_export[node, t] : 0)                                               # import/export
         )
@@ -509,7 +494,6 @@ current constraints:
         @constraint(model, 
             Reactive_Demand[t, node] +                                                  # reactive demand
             q_exit ≤                                                                    # reactive flow to other nodes
-            # sum(reactive_generation[node, x, t] for x in GEN_TECHS if x in EL_GEN) +  # el generation (reactive)
             sum(reactive_generation[node, x, t] for x ∈ EL_GEN) +                       # el generation (reactive)
             q_enter                                                                     # reactive flow to this node
         )
@@ -517,30 +501,30 @@ current constraints:
 
     # EQ (28) - (29) #
     # Heat nodal balance
-    for (_, node) ∈ enumerate(NODES), t ∈ PERIODS
+    for node ∈ NODES, t ∈ PERIODS
         # heat pipe flow equations would come here if there is any...
         @constraint(model,
             # efficiencies / el-heat conversion rate for HP and Boilers have been considered in el balance therefore not included
             Heatdemand_data[t, node] +
-            sum(storage_charge[node, s, t] * Stotech_data[s].Ch_eff for s ∈ STO_TECHS if s ∈ HEAT_STO) ≤        # charging heat storage
-            sum(active_generation[node, x, t] / Gentech_data[x].Alpha for x ∈ GEN_TECHS if x ∈ CHP) +           # generation from heat techs, CHP if with alpha
-            sum(active_generation[node, x, t] for x ∈ GEN_TECHS if x ∈ HP) +                                    # for HP
-            sum(active_generation[node, x, t] for x ∈ GEN_TECHS if x ∈ BOILER) +                                # for boilers            
-            sum(storage_discharge[node, s, t] for s ∈ STO_TECHS if s ∈ HEAT_STO)                                # discharge from heat storage
+            sum(storage_charge[node, s, t] * Stotech_data[s].Ch_eff for s ∈ HEAT_STO) ≤        # charging heat storage
+            sum(active_generation[node, x, t] / Gentech_data[x].Alpha for x ∈ CHP) +           # generation from heat techs, CHP if with alpha
+            sum(active_generation[node, x, t] for x ∈ HP) +                                    # for HP
+            sum(active_generation[node, x, t] for x ∈ BOILER) +                                # for boilers            
+            sum(storage_discharge[node, s, t] for s ∈ HEAT_STO)                                # discharge from heat storage
             # possibility to buy heat from other region?
         )
     end
 
     # EQ (30) #
     # H2 nodal balance
-    for (_, node) ∈ enumerate(NODES), t ∈ PERIODS
+    for node ∈ NODES, t ∈ PERIODS
         # H2 pipe flow equations would come here if there is any...
         @constraint(model,
             H2demand_data[t, node] +
-            sum(storage_charge[node, s, t] * Stotech_data[s].Ch_eff for s ∈ STO_TECHS if s ∈ H2_STO) +          # charging heat storage
-            sum(active_generation[node, x, t] / Gentech_data[x].Efficiency for x ∈ GEN_TECHS if x ∈ FC) ≤       # fuel cell to convert h2 - el
-            sum(active_generation[node, x, t] * Gentech_data[x].Efficiency for x ∈ GEN_TECHS if x ∈ EC) +       # electrolyser to convert el - h2
-            sum(storage_discharge[node, s, t] for s ∈ STO_TECHS if s ∈ H2_STO)                                  # discharge from H2 storage
+            sum(storage_charge[node, s, t] * Stotech_data[s].Ch_eff for s ∈ H2_STO) +          # charging heat storage
+            sum(active_generation[node, x, t] / Gentech_data[x].Efficiency for x ∈ FC) ≤       # fuel cell to convert h2 - el
+            sum(active_generation[node, x, t] * Gentech_data[x].Efficiency for x ∈ EC) +       # electrolyser to convert el - h2
+            sum(storage_discharge[node, s, t] for s ∈ H2_STO)                                  # discharge from H2 storage
             # possibility to buy H2 from other region?
         )
     end
@@ -581,19 +565,19 @@ current constraints:
         # EQ (42) #
         # linearised thermal constraints
         @constraint(model,
-            τ[1] * active_flow[line, t] + τ[1] * reactive_flow[line, t] ≤ sqrt(2) * Lines_props[line][:s_max]
+            1 * active_flow[line, t] + 1 * reactive_flow[line, t] ≤ sqrt(2) * Lines_props[line][:s_max]
         )
 
         @constraint(model,
-            τ[1] * active_flow[line, t] + τ[2] * reactive_flow[line, t] ≤ sqrt(2) * Lines_props[line][:s_max]
+            1 * active_flow[line, t] + -1 * reactive_flow[line, t] ≤ sqrt(2) * Lines_props[line][:s_max]
         )
 
         @constraint(model,
-            τ[2] * active_flow[line, t] + τ[1] * reactive_flow[line, t] ≤ sqrt(2) * Lines_props[line][:s_max]
+            -1 * active_flow[line, t] + 1 * reactive_flow[line, t] ≤ sqrt(2) * Lines_props[line][:s_max]
         )
 
         @constraint(model,
-            τ[2] * active_flow[line, t] + τ[2] * reactive_flow[line, t] ≤ sqrt(2) * Lines_props[line][:s_max]
+            -1 * active_flow[line, t] + -1 * reactive_flow[line, t] ≤ sqrt(2) * Lines_props[line][:s_max]
         )
     end
 
@@ -625,8 +609,10 @@ function set_gen_bounds(
     ## Sets and parameters
 
     @unpack NODES, 
+            COAST_NODES, 
             GEN_TECHS, 
-            STO_TECHS = sets
+            STO_TECHS, 
+            PERIODS = sets
     
     @unpack Gentech_data, 
             Stotech_data = params
@@ -634,8 +620,8 @@ function set_gen_bounds(
     ## Variables
 
     @unpack generation_capacity, 
-            storage_capacity = vars
-
+            storage_capacity, 
+            active_generation = vars
     #=------------------------------------------------------------------------------
     GENERATION LOWER BOUNDS
 
@@ -656,7 +642,7 @@ function set_gen_bounds(
 
     # define the lower bounds
     # set 0 as default value if no values are assigned
-    for (_, node) ∈ enumerate(NODES), (_, tech) ∈ enumerate(GEN_TECHS)
+    for node ∈ NODES, tech ∈ GEN_TECHS
         set_lower_bound(generation_capacity[node, tech], get(capacity_lower_bounds, (node, tech), 0.0))
     end
 
@@ -666,9 +652,10 @@ function set_gen_bounds(
 
     # EQ (8) #
     # limits of area for each node based on Voronoi cell
+    # assume 4% of the available area in m2
     node_area = Dict(row.node_id => row.area_m2 for row ∈ eachrow(grid_infra.subs))
 
-    for (_, node) ∈ enumerate(NODES)
+    for node ∈ NODES
         @constraint(model,
             sum(generation_capacity[node, gen_tech] * Gentech_data[gen_tech].Space_m2 for gen_tech ∈ GEN_TECHS) +
             sum(storage_capacity[node, sto_tech] * Stotech_data[sto_tech].Space_m2 for sto_tech ∈ STO_TECHS) ≤ 
@@ -676,6 +663,38 @@ function set_gen_bounds(
         )
     end
     
+    # nodes not in coastal municipalities not eligible for offshore wind farms
+    for node ∈ NODES, t ∈ PERIODS
+        if node ∉ COAST_NODES
+            @constraint(model, 
+                generation_capacity[node, "WOFF"] == 0
+            )
+
+            @constraint(model, 
+                active_generation[node, "WOFF", t] == 0
+            )
+        end
+    end
+
+    # techs that most probably not invested in future
+    TECHS_NOT_INVESTED = [
+                        "COCHP", 
+                        "WCHP", 
+                        "WBO", 
+                        "HYD"
+    ]
+
+    # further limitations for coal, waste CHP, waste boiler
+    # as they are not likely invested in future
+    # set existing value as upper bound if any
+    # otherwise set as 0
+    for node ∈ NODES, tech ∈ TECHS_NOT_INVESTED
+        fix(generation_capacity[node, tech], 
+            get(capacity_lower_bounds, (node, tech), 0.0), 
+            force=true
+        )
+     end
+
 end         # end set_gen_bounds
 
 

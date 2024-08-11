@@ -104,7 +104,6 @@ Return
     ------------------------------------------------------------------------------=#
     # Voltage nominal
     Vnom = 130              # kV
-    τ = [1, -1]             # power flow linearising parameters
 
     #=------------------------------------------------------------------------------
     MODEL SETS
@@ -276,7 +275,6 @@ Return
              Demand_sin_ϕ, 
              Lines_props,
              Vnom, 
-             τ,
     )
 
     return  Sets, Params

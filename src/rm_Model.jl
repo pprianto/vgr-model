@@ -99,12 +99,6 @@ Return:
             print(iis_model)
         end
     end
-
-    println("---------------------------------------------")
-    println("The solver termination status is $(termination_status(model))")
-    
-    cost = objective_value(model)
-    println("The cost of system is $(cost) M€.")
     
     time_solve = time()-start_solve  
     println("---------------------------------------------")
@@ -215,19 +209,24 @@ including:
     ------------------------------------------------------------------------------=#
 
     if termination_status(model) == MOI.OPTIMAL
+        println("---------------------------------------------")
+        println("The solver termination status is $(termination_status(model))")
         println("Optimal solution found")
+        
+        cost = objective_value(model)
+        println("The system cost is $(cost) M€.")
 
         # Investment solutions
         Generation_Capacity = Dict{String, DataFrame}()
         Storage_Capacity = Dict{String, DataFrame}()
 
-        for (_, node) in enumerate(NODES)
+        for node ∈ NODES
             Generation_Capacity[node] = DataFrame(
-                [Symbol(tech) => value(generation_capacity[node, tech]) for tech in GEN_TECHS]
+                [Symbol(tech) => value(generation_capacity[node, tech]) for tech ∈ GEN_TECHS]
             )
 
             Storage_Capacity[node] = DataFrame(
-                [Symbol(tech) => value(storage_capacity[node, tech]) for tech in STO_TECHS]
+                [Symbol(tech) => value(storage_capacity[node, tech]) for tech ∈ STO_TECHS]
             )
         end
 
@@ -237,19 +236,19 @@ including:
         Storage_Discharge = Dict{String, DataFrame}()
         Storage_Level = Dict{String, DataFrame}()
 
-        for (_, node) in enumerate(NODES)
+        for node ∈ NODES
             Generation_Dispatch[node] = DataFrame(
-                [value(active_generation[node, tech, t]) for t in PERIODS, tech in GEN_TECHS], 
+                [value(active_generation[node, tech, t]) for t ∈ PERIODS, tech ∈ GEN_TECHS], 
                 GEN_TECHS
             )
 
             Storage_Charge[node] = DataFrame(
-                [value(storage_charge[node, tech, t]) for t in PERIODS, tech in STO_TECHS], 
+                [value(storage_charge[node, tech, t]) for t ∈ PERIODS, tech ∈ STO_TECHS], 
                 STO_TECHS
             )
 
             Storage_Discharge[node] = DataFrame(
-                [value(storage_discharge[node, tech, t]) for t in PERIODS, tech in STO_TECHS], 
+                [value(storage_discharge[node, tech, t]) for t ∈ PERIODS, tech ∈ STO_TECHS], 
                 STO_TECHS
             )
 
@@ -265,24 +264,24 @@ including:
         Import_from = DataFrame()
         Export_Import = DataFrame()
 
-        for (_, node) in enumerate(TRANSMISSION_NODES)
-            Export_to[!, Symbol(node)] = [value(export_to[node, t]) for t in PERIODS]
-            Import_from[!, Symbol(node)] = [value(import_from[node, t]) for t in PERIODS]
-            Export_Import[!, Symbol(node)] = [value(import_export[node, t]) for t in PERIODS]
+        for node ∈ TRANSMISSION_NODES
+            Export_to[!, Symbol(node)] = [value(export_to[node, t]) for t ∈ PERIODS]
+            Import_from[!, Symbol(node)] = [value(import_from[node, t]) for t ∈ PERIODS]
+            Export_Import[!, Symbol(node)] = [value(import_export[node, t]) for t ∈ PERIODS]
         end
 
         # Voltage
         Nodal_Voltage = DataFrame()
 
-        for (_, node) in enumerate(NODES)
-            Nodal_Voltage[!, Symbol(node)] = [value(nodal_voltage[node, t]) for t in PERIODS]
+        for node ∈ NODES
+            Nodal_Voltage[!, Symbol(node)] = [value(nodal_voltage[node, t]) for t ∈ PERIODS]
         end
 
         # Power Flow
         Active_Flow = DataFrame()
 
-        for (_, line) in enumerate(LINES)
-            Active_Flow[!, Symbol(line)] = [value(active_flow[line, t]) for t in PERIODS]
+        for line ∈ LINES
+            Active_Flow[!, Symbol(line)] = [value(active_flow[line, t]) for t ∈ PERIODS]
         end
 
         results =   (; 

@@ -23,7 +23,10 @@ include("rm_Model.jl")
 
 # Set directory
 current_dir = pwd()
+mkpath("modelinput")        # input folder
+mkpath("results")           # results folder
 input_dir = joinpath(current_dir, "modelinput")
+results_dir = joinpath(current_dir, "results")
 
 #=---------------------------------------------
 INPUT DATA
@@ -36,12 +39,12 @@ elpris_df = read_file(joinpath(input_dir, "elpris_.xlsx"))
 substations_df = read_file(joinpath(input_dir, "subs_final.csv"))
 lines_df = read_file(joinpath(input_dir, "lines_final.csv"))
 pp_df = read_file(joinpath(input_dir, "pp_final.csv"))
-pp_df = rename_pp(pp_df)                                                                    # rename the tech according to the tech props
+pp_df = rename_pp(pp_df)                                                                    # rename the tech according to the index sets
 
 # technology properties
 # assume 2050
-gen_tech_df = read_file(joinpath(input_dir, "gen_tech_2050.xlsx"))
-sto_tech_df = read_file(joinpath(input_dir, "sto_tech_2050.xlsx"))
+gen_tech_df = read_file(joinpath(input_dir, "gen_tech_2050_.xlsx"))
+sto_tech_df = read_file(joinpath(input_dir, "sto_tech_2050_.xlsx"))
 
 # demand data
 # currently in hourly period
@@ -68,8 +71,10 @@ INITIATE MODEL
 model = Model(Gurobi.Optimizer)
 # set_attribute(model, "Presolve", 0)
 # set_optimizer_attribute(model, "NumericFocus", 2)
-set_optimizer_attribute(model, "BarHomogeneous", 1)     # due to rhs? TODO: improve the area for invesment constraint
+# set_optimizer_attribute(model, "BarHomogeneous", 1)     # due to rhs? TODO: improve the area for invesment constraint
 set_optimizer_attribute(model, "Threads", Threads.nthreads())
+log_file = joinpath(results_dir, "model_log.txt")
+set_optimizer_attribute(model, "LogFile", log_file)
 
 @time model, results, times = run_Model(
     model,
@@ -79,3 +84,4 @@ set_optimizer_attribute(model, "Threads", Threads.nthreads())
     demand,
     profiles  
 );
+
