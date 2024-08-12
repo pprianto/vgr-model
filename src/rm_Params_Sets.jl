@@ -46,9 +46,9 @@ Return
 
     # trial runs
     # adjust hour accordingly
-    Eldemand_data = demand.el[1:12, :]
-    Heatdemand_data = demand.heat[1:12, :]
-    H2demand_data = demand.h2[1:12, :]
+    Eldemand_data = demand.el[1:24, :]
+    Heatdemand_data = demand.heat[1:24, :]
+    H2demand_data = demand.h2[1:24, :]
 
     #=------------------------------------------------------------------------------
     PRICES
@@ -116,7 +116,7 @@ Return
     GEN_TECHS = tech_props.gen[:, :Tech]        # generation tech set
     STO_TECHS = tech_props.sto[:, :Tech]        # storage tech set
     # PERIODS = demand.el[:, :hour]               # time period set (hourly), full run
-    PERIODS = demand.el[1:12, :hour]            # time period set (hourly), trial runs
+    PERIODS = demand.el[1:24, :hour]            # time period set (hourly), trial runs
 
     #=------------------------------------------------------------------------------
     SUBSETS

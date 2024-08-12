@@ -934,12 +934,6 @@ The following are the sequence to build the el network
 
 if __name__ == "__main__":
 
-    # current_dir = os.getcwd()
-    # subfolder = "inputs"
-    # input_folder = os.path.join(current_dir, subfolder)
-    # mode = 0o666
-    # os.makedirs(input_folder, mode, exist_ok=True)
-
     input_folder = prerequisites("inputs")
 
     osmlines_fn = getinputfiles("lines_raw.geojson", input_folder)

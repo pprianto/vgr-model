@@ -907,12 +907,6 @@ The following are the sequence to retrieve and clean the OSM data
 
 if __name__ == "__main__":
 
-    # current_dir = os.getcwd()
-    # subfolder = "inputs"
-    # input_folder = os.path.join(current_dir, subfolder)
-    # mode = 0o666
-    # os.makedirs(input_folder, mode, exist_ok=True)
-
     input_folder = prerequisites("inputs")
 
     rawsubs_df, rawlines_df, rawgens_df, rawplants_df = collect_from_osm('Västra Götaland')

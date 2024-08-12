@@ -659,7 +659,7 @@ function set_gen_bounds(
         @constraint(model,
             sum(generation_capacity[node, gen_tech] * Gentech_data[gen_tech].Space_m2 for gen_tech ∈ GEN_TECHS) +
             sum(storage_capacity[node, sto_tech] * Stotech_data[sto_tech].Space_m2 for sto_tech ∈ STO_TECHS) ≤ 
-            node_area[node]
+            node_area[node] * 0.04
         )
     end
     

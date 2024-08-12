@@ -179,12 +179,6 @@ def group_demand(
 
 if __name__ == "__main__":
 
-    # current_dir = os.getcwd()
-    # subfolder = "inputs"
-    # input_folder = os.path.join(current_dir, subfolder)
-    # mode = 0o666
-    # os.makedirs(input_folder, mode, exist_ok=True)
-
     input_folder = prerequisites("inputs")
     model_input = prerequisites("modelinput")
 
@@ -202,12 +196,17 @@ if __name__ == "__main__":
     el_demand_fn = getinputfiles("VGR_eldemand.xlsx", input_folder)
     heat_profile_fn = getinputfiles("heat_profile.xlsx", input_folder)
     heat_demand_fn = getinputfiles("VGR_heatdemand.xlsx", input_folder)
+    h2_profile_fn = getinputfiles("h2_profile.xlsx", input_folder)
+    h2_demand_fn = getinputfiles("VGR_h2demand.xlsx", input_folder)
 
     el_profile = pd.read_excel(el_profile_fn, sheet_name="all")
     el_demand = pd.read_excel(el_demand_fn, sheet_name="El_demand_MWh")
 
     heat_profile = pd.read_excel(heat_profile_fn, sheet_name=0)
     heat_demand = pd.read_excel(heat_demand_fn, sheet_name="DH_demand_MWh")
+
+    h2_profile = pd.read_excel(h2_profile_fn, sheet_name=0)
+    h2_demand = pd.read_excel(h2_demand_fn, sheet_name="H2_demand_MWh")
 
     kommun_nodes, el_kommun_demand, el_nodal_demand = group_demand(
                                                     subs_df,
@@ -223,14 +222,17 @@ if __name__ == "__main__":
                                                     heat_demand
                                                     )
 
-    savefile(kommun_nodes, "kommun_newnode", input_folder)
-    savefile(el_kommun_demand, "el_kommun_demand", input_folder)
-    savefile(el_nodal_demand, "el_nodal_demand", input_folder)
-    savefile(heat_kommun_demand, "heat_kommun_demand", input_folder)
-    savefile(heat_nodal_demand, "heat_nodal_demand", input_folder)
+    kommun_nodes, h2_kommun_demand, h2_nodal_demand = group_demand(
+                                                    subs_df,
+                                                    vgr_kommun,
+                                                    h2_profile,
+                                                    h2_demand
+                                                    )
 
     savefile(kommun_nodes, "kommun_newnode", model_input)
     savefile(el_kommun_demand, "el_kommun_demand", model_input)
     savefile(el_nodal_demand, "el_nodal_demand", model_input)
     savefile(heat_kommun_demand, "heat_kommun_demand", model_input)
     savefile(heat_nodal_demand, "heat_nodal_demand", model_input)
+    savefile(h2_kommun_demand, "h2_kommun_demand", model_input)
+    savefile(h2_nodal_demand, "h2_nodal_demand", model_input)
