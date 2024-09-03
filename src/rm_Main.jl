@@ -12,9 +12,11 @@ Return:
     - Dataframe of results for ...
 ------------------------------------------------------------------------------=#
 
-using DataFrames, AxisArrays, CSV, XLSX, UnPack
+using DataFrames, CSV, XLSX, UnPack, Printf
 using JuMP, HiGHS, Ipopt, GLPK, Gurobi
-import SparseArrays, LinearAlgebra
+import AxisArrays, SparseArrays, LinearAlgebra
+import Plots, CairoMakie
+CairoMakie.activate!()
 
 include("rm_Utilities.jl")
 include("rm_Params_Sets.jl")
@@ -23,7 +25,7 @@ include("rm_Model.jl")
 
 # Set directory
 current_dir = pwd()
-mkpath("modelinput")        # input folder
+mkpath("modelinput")        # input folder, should already be created during retrive OSM process
 mkpath("results")           # results folder
 input_dir = joinpath(current_dir, "modelinput")
 results_dir = joinpath(current_dir, "results")
@@ -33,7 +35,7 @@ INPUT DATA
 ---------------------------------------------=#
 
 # electricity price
-elpris_df = read_file(joinpath(input_dir, "elpris_.xlsx"))
+elpris_df = read_file(joinpath(input_dir, "elpris.csv"))
 
 # electrical infrastructure
 substations_df = read_file(joinpath(input_dir, "subs_final.csv"))
@@ -43,8 +45,8 @@ pp_df = rename_pp(pp_df)                                                        
 
 # technology properties
 # assume 2050
-gen_tech_df = read_file(joinpath(input_dir, "gen_tech_2050_.xlsx"))
-sto_tech_df = read_file(joinpath(input_dir, "sto_tech_2050_.xlsx"))
+gen_tech_df = read_file(joinpath(input_dir, "gen_tech_2050.csv"))
+sto_tech_df = read_file(joinpath(input_dir, "sto_tech_2050.csv"))
 
 # demand data
 # currently in hourly period
@@ -59,7 +61,7 @@ WT_on_profile = read_file(joinpath(input_dir, "nodal_profile_onshore_wind_2019.c
 WT_off_profile = read_file(joinpath(input_dir, "nodal_profile_offshore_wind_2019.csv"))     # offshore wind
 
 # collections of input data in NamedTuple
-price = (; el=elpris_df)
+price = (; SE3=Array(elpris_df.SE3), NO1=Array(elpris_df.NO1), DK1=Array(elpris_df.DK1))
 grid_infra = (; subs=substations_df, lines=lines_df, pp=pp_df)
 tech_props = (; gen=gen_tech_df, sto=sto_tech_df)
 demand = (; el=el_demand_df, heat=heat_demand_df, h2=h2_demand_df)
@@ -68,16 +70,33 @@ profiles = (; PVfix=PV_fix_profile, PVopt=PV_opt_profile, WTon=WT_on_profile, WT
 #=---------------------------------------------
 INITIATE MODEL
 ---------------------------------------------=#
-model = Model(Gurobi.Optimizer)
-# set_attribute(model, "Presolve", 0)
-# set_optimizer_attribute(model, "NumericFocus", 2)
-# set_optimizer_attribute(model, "BarHomogeneous", 1)     # due to rhs? TODO: improve the area for invesment constraint
-set_optimizer_attribute(model, "Threads", Threads.nthreads())
-log_file = joinpath(results_dir, "model_log.txt")
-set_optimizer_attribute(model, "LogFile", log_file)
+# Gurobi parameters
+optimizer = optimizer_with_attributes(
+                Gurobi.Optimizer,
+                "Threads" => Threads.nthreads(),
+                "BarHomogeneous" => 1,              # 1: enabled
+                "Crossover" => -1,                  # 0: disabled
+                "Method" => -1,                     # -1: auto, 1: dual simplex
+                "Presolve" => 2,                    # 2: aggressive
+                # "NumericFocus" => 2,
+)
 
-@time model, results, times = run_Model(
-    model,
+m = Model(optimizer)
+# set_silent(m)
+# log_file = joinpath(results_dir, "model_log.txt")
+# set_optimizer_attribute(m, "LogFile", log_file)
+
+mutable struct Model_Struct
+    model::Model        # model info
+    sets::NamedTuple    # model sets
+    params::NamedTuple  # model parameters
+    vars::NamedTuple    # model variables
+    times::NamedTuple   # time to build and solve model
+end
+
+
+@time model_done = run_Model(
+    m,
     price,
     grid_infra,
     tech_props,
@@ -85,3 +104,78 @@ set_optimizer_attribute(model, "LogFile", log_file)
     profiles  
 );
 
+(; model, sets, vars) = model_done
+
+
+@time results = query_solutions(
+    model,
+    sets,
+    vars
+);
+
+#=---------------------------------------------
+POST - PROCESSING
+---------------------------------------------=#
+
+function vgr_investment(
+    result_df
+)
+
+    if "NODE" in names(result_df)
+        # get only VGR rows
+        VGR_inv = result_df[result_df.NODE .== "VGR", 2:end]
+
+        # remove anything that is zero (not investing)
+        VGR_inv = VGR_inv[!, [col for col in names(VGR_inv) if VGR_inv[1, col] > 0]]
+
+        return VGR_inv
+
+    else
+        println("column NODE is not found")
+
+        return nothing
+    
+    end
+end
+
+vgr_gen_inv = vgr_investment(results.Generation_Investment)
+vgr_sto_inv = vgr_investment(results.Storage_Investment)
+
+function basic_barchart(
+    inv_df
+)
+
+    x = names(inv_df)
+    y = Array(inv_df[1,:])
+    (ymin, ymax) = extrema(y)
+    delta_y = 0.05*(ymax - ymin)
+    cap_str = [(@sprintf("%.2f MWh", cap), 5, 45.0) for cap in y]    # the annotation, text size, text rotation
+
+    Plots.bar(
+        x,     
+        y,                   
+        legend = false,
+        xticks = :all,
+        xrotation = 45,
+        bar_width = 0.5,
+        color = 1:size(inv_df, 2),
+        xlabel = "Technology",
+        ylabel = "Capacity (MW)",
+        title = "Generation Investment in VGR",
+    )
+
+    Plots.annotate!(
+        x,     
+        y .+ delta_y,
+        cap_str,
+        ylim = (0, ymax + 2*delta_y),
+        xrotation = 45,
+    )
+
+end
+
+a = basic_barchart(vgr_gen_inv)
+b = basic_barchart(vgr_sto_inv)
+
+Plots.savefig(a, "gen_1d.png")
+Plots.savefig(b, "sto_1d.png")

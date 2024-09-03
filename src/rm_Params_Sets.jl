@@ -53,8 +53,10 @@ Return
     #=------------------------------------------------------------------------------
     PRICES
     ------------------------------------------------------------------------------=#
-    # electricity price SE3 in €/MWh 
-    El_price = price.el.elpris         
+    # electricity prices in €/MWh 
+    SE3_price = price.SE3
+    NO1_price = price.NO1
+    DK1_price = price.DK1         
 
     # heat and hydrogen market price?
     # fuel price? 
@@ -69,8 +71,8 @@ Return
     # https://ens.dk/en/our-services/technology-catalogues/technology-data-renewable-fuels
     # https://ens.dk/en/our-services/technology-catalogues/technology-data-transport-energy
 
-    Gentech_data = Dict(tech_props.gen[:, :Tech] .=> eachrow(tech_props.gen[:, Not(:Tech)]))
-    Stotech_data = Dict(tech_props.sto[:, :Tech] .=> eachrow(tech_props.sto[:, Not(:Tech)]))
+    Gentech_data = Dict(tech_props.gen[!, :Tech] .=> eachrow(tech_props.gen[!, Not(:Tech)]))
+    Stotech_data = Dict(tech_props.sto[!, :Tech] .=> eachrow(tech_props.sto[!, Not(:Tech)]))
 
     #=------------------------------------------------------------------------------
     DISCOUNT RATE
@@ -112,11 +114,11 @@ Return
     #=------------------------------------------------------------------------------
     MAIN SETS
     ------------------------------------------------------------------------------=#  
-    NODES = grid_infra.subs[:, :node_id]        # node set
-    GEN_TECHS = tech_props.gen[:, :Tech]        # generation tech set
-    STO_TECHS = tech_props.sto[:, :Tech]        # storage tech set
-    # PERIODS = demand.el[:, :hour]               # time period set (hourly), full run
-    PERIODS = demand.el[1:24, :hour]            # time period set (hourly), trial runs
+    NODES = grid_infra.subs[!, :node_id]        # node set
+    GEN_TECHS = tech_props.gen[!, :Tech]        # generation tech set
+    STO_TECHS = tech_props.sto[!, :Tech]        # storage tech set
+#     PERIODS = demand.el[!, :hour]               # time period set (hourly), full run
+    PERIODS = demand.el[1:24, :hour]             # time period set (hourly), trial runs
 
     #=------------------------------------------------------------------------------
     SUBSETS
@@ -161,6 +163,22 @@ Return
         "STR3",     # 28
     ]
 
+    # Pit Thermal Storage is not feasible in Gothenburg
+    GBG = [
+        "GBG1",     # 1
+        "GBG2",
+        "GBG3",
+        "GBG4",
+        "GBG5",
+        "GBG6",
+        "GBG7",
+        "GBG8",
+        "GBG9",
+        "GBG10",    # 10
+        "GBG11",
+        "GBG12",
+    ]
+
     #=------------------------------------------------------------------------------
     GENERATION TECHNOLOGY SUBSETS
     ------------------------------------------------------------------------------=# 
@@ -174,6 +192,9 @@ Return
     TRANSMISSION NODES SUBSETS
     ------------------------------------------------------------------------------=# 
     trans_node = filter(row -> row.import_trans == true, grid_infra.subs)    
+    SE3_TRANS_NODES = filter(row -> !(row.node_id in ["MOL1", "DAL3"]), trans_node).node_id
+    NO1_TRANS_NODES = filter(row -> row.node_id == "DAL3", trans_node).node_id
+    DK1_TRANS_NODES = filter(row -> row.node_id == "MOL1", trans_node).node_id
     TRANSMISSION_NODES = trans_node.node_id
 
     #=------------------------------------------------------------------------------
@@ -185,12 +206,12 @@ Return
             "WCHP",     # waste chp
             "WCCHP",    # wood chips chp
             "WPCHP",    # wood pellets chp
-            "SBCHP"     # straw biomass chp
+            # "SBCHP"     # straw biomass chp
     ]
 
     FC = [              # fuel cells
             "SOFC",     # solid oxide fuel cells
-            "PFC"       # pem fuel cell
+            # "PFC"       # pem fuel cell
     ]
 
     WIND = [
@@ -206,12 +227,14 @@ Return
 
     HP = [
             "HPAIR",    # heat pumps air source
-            "HPEX"      # heat pumps excess heat
+            "HPEX",      # heat pumps excess heat
+            "HPSW"      # seawater heat pumps
     ]
 
     BOILER = [
                 "EB",   # electric boilers
-                "GB"    # natural gas boilers
+                "GB",    # natural gas boilers
+                "HBW"   # biomass heat only boiler
     ]
     
     EC = [
@@ -228,7 +251,31 @@ Return
                 "WCHP",
                 "WCCHP",
                 "WPCHP",
-                "SBCHP"
+                # "SBCHP"
+    ]
+
+    # techs with 1 PERIODS or less start up time
+    THERMAL_1H = [
+                    "GTSC",
+                    "GEBG"
+    ]
+
+    # techs with 2 PERIODS start up time
+    THERMAL_2H = [
+                    "CCGT",
+                    "WCHP"
+    ]
+
+    # # techs with 8 PERIODS start up time
+    # THERMAL_8H = [
+    #                 "SBCHP"
+    # ]
+
+    # techs with 12 PERIODS start up time
+    THERMAL_12H = [
+                    "COCHP",
+                    "WCCHP",
+                    "WPCHP"
     ]
 
     #=------------------------------------------------------------------------------
@@ -238,7 +285,11 @@ Return
     Sets = (; 
             NODES, 
             TRANSMISSION_NODES,
-            COAST_NODES, 
+            SE3_TRANS_NODES,
+            NO1_TRANS_NODES,
+            DK1_TRANS_NODES,
+            COAST_NODES,
+            GBG,
             GEN_TECHS, 
             EL_GEN, 
             HEAT_GEN, 
@@ -258,11 +309,17 @@ Return
             HP,
             BOILER,
             EC,
-            FLEX_TH
+            FLEX_TH,
+            THERMAL_1H,
+            THERMAL_2H,
+            # THERMAL_8H,
+            THERMAL_12H
     )
 
     Params = (; 
-             El_price, 
+             SE3_price,
+             NO1_price,
+             DK1_price, 
              Gentech_data, 
              Stotech_data, 
              Eldemand_data, 
@@ -312,22 +369,22 @@ use short line model
     lines_df[!, :r_line] = [1 / sum(1/row[:r_per_km] for _ in 1:row[:circuits]) for row in eachrow(lines_df)]
     lines_df[!, :x_line] = [1 / sum(1/row[:x_per_km] for _ in 1:row[:circuits]) for row in eachrow(lines_df)]
     lines_df[!, :z_line] = [1 / sum(1/row[:z_per_km] for _ in 1:row[:circuits]) for row in eachrow(lines_df)]
-    lines_df[!, :z_total] = lines_df[:, :z_line] .* lines_df[:, :length_km]
+    lines_df[!, :z_total] = lines_df[!, :z_line] .* lines_df[!, :length_km]
 
     # admittance of each lines
     # negative due to the convention in admittance matrix Y_ij equal to negative of admittance each line -y_ij
-    lines_df[!, :y_total] = -1 ./ (lines_df[:, :z_total])
+    lines_df[!, :y_total] = -1 ./ (lines_df[!, :z_total])
 
     # split into real imag parts for r,x,g,b
-    lines_df[!, :r_total] = real(lines_df[:, :z_total])
-    lines_df[!, :x_total] = imag(lines_df[:, :z_total])
+    lines_df[!, :r_total] = real(lines_df[!, :z_total])
+    lines_df[!, :x_total] = imag(lines_df[!, :z_total])
 
-    lines_df[!, :g_total] = real(lines_df[:, :y_total])
-    lines_df[!, :b_total] = imag(lines_df[:, :y_total])
+    lines_df[!, :g_total] = real(lines_df[!, :y_total])
+    lines_df[!, :b_total] = imag(lines_df[!, :y_total])
 
     # thermal limits
     lines_df[!, :max_i_ka] .= max_i_ka
-    lines_df[!, :s_max] = sqrt(3) .* Vnom .* lines_df[:, :max_i_ka] .* lines_df[:, :circuits]
+    lines_df[!, :s_max] = sqrt(3) .* Vnom .* lines_df[!, :max_i_ka] .* lines_df[!, :circuits]
 
     # comparing to the admittance matrix method with incidence matrix
     Ybus, G, B = admittance_matrix(lines_df)
@@ -341,7 +398,7 @@ function arcs_prep(
     lines_df::DataFrame
 )
 
-    lines = lines_df[:, [:lines_id, :node_from, :node_to, :g_total, :b_total, :s_max]]
+    lines = lines_df[!, [:lines_id, :node_from, :node_to, :g_total, :b_total, :s_max]]
     lines[!, :arcs_fr] = [(row.lines_id, row.node_from, row.node_to) for row in eachrow(lines)]
     lines[!, :arcs_to] = [(row.lines_id, row.node_to, row.node_from) for row in eachrow(lines)]
     # lines[!, :arcs] = [lines[!, :arcs_fr]; lines[!, :arcs_to]]
@@ -353,7 +410,7 @@ function arcs_prep(
     ARCS_FR = lines[!, :arcs_fr]        # combined set of lines - nodes
     ARCS_TO = lines[!, :arcs_to]
 
-    Lines_props = Dict(lines[:, :lines_id] .=> eachrow(lines[:, Not(:lines_id)]))
+    Lines_props = Dict(lines[!, :lines_id] .=> eachrow(lines[!, Not(:lines_id)]))
 
     lines_sets = (; 
                 LINES,

@@ -55,7 +55,14 @@ Read either xls or csv file as dataframe
         error("Unsupported file format. Please provide XLS or CSV file.")
     
     end
-    
+
+    string_columns = names(df, col -> occursin("String", string(eltype(df[!, col]))))
+
+    for col in string_columns
+        df[!, col] = [ismissing(val) ? missing : String(val) for val in df[!, col]]
+    end
+
+
     return df
 
 end
@@ -182,5 +189,21 @@ https://jump.dev/JuMP.jl/stable/tutorials/applications/optimal_power_flow/
     B = DataFrame(B, Symbol.(nodes))
 
     return Ybus, G, B
+
+end
+
+function sum_capacities(
+    investment_df
+)
+
+    VGR_node = DataFrame(NODE = "VGR")
+    total_inv = combine(investment_df, 
+                            names(investment_df, Not(:NODE)) .=> sum .=> names(investment_df, Not(:NODE))
+                            )
+
+    total_inv = hcat(total_inv, VGR_node)
+    investment_df = vcat(investment_df, total_inv)
+
+    return investment_df
 
 end

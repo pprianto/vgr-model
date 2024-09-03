@@ -63,7 +63,7 @@ Return:
     println("---------------------------------------------")
     start_const = time()
 
-    constraints = make_Constraints(
+    vars = make_Constraints(
         model,
         sets,
         params,
@@ -109,11 +109,11 @@ Return:
     RETURN
     ------------------------------------------------------------------------------=#  
 
-    results = query_solutions(
-        model,
-        sets,
-        vars
-    )
+    # results = query_solutions(
+    #     model,
+    #     sets,
+    #     vars
+    # )
 
     times = (;
             time_sets,
@@ -122,7 +122,17 @@ Return:
             time_solve
     )
 
-    return model, results, times
+    model_struct = Model_Struct(
+                                model,
+                                sets,
+                                params,
+                                vars,
+                                times
+    )
+    
+    return model_struct
+
+    # return model, results, times
 
 end
 
@@ -138,18 +148,22 @@ function query_solutions(
 Extract the optimum solutions
 Taking the following:
 1. Model structure
-2. Model Sets
-3. Model Variables
+2. Model sets
+3. Model variables
 
 Return:
 optimal solution in Dict or DataFrame, TODO: to consider other data structure?
 which then converted into NamedTuple
 including:
 1. Investments
-2. Dispatch
+2. Dispatch (P&Q)
 3. Export/Import
-4. Nodal voltage
-5. Power flow in lines
+4. Voltage magnitude and angle
+5. Power flow in lines (P&Q)
+
+Considerations for data structure:
+1. easier to save as csv or xls
+2. easier for plotting
 
 ------------------------------------------------------------------------------=#
 
@@ -182,9 +196,9 @@ including:
 
     ## Variables
 
-    @unpack total_cost, 
-            generation_capacity, 
-            storage_capacity, 
+    @unpack existing_generation,
+            generation_investment, 
+            storage_investment, 
             active_generation, 
             reactive_generation, 
             generation_spin,
@@ -192,7 +206,7 @@ including:
             gen_startup_cost,
             gen_partload_cost,
             gen_startup_CO2,
-            gen_partload_CO2, 
+            gen_partload_CO2,            
             storage_charge, 
             storage_discharge, 
             storage_level, 
@@ -214,24 +228,25 @@ including:
         println("Optimal solution found")
         
         cost = objective_value(model)
-        println("The system cost is $(cost) M€.")
+        println("The system cost is $(cost) k€.")
 
         # Investment solutions
-        Generation_Capacity = Dict{String, DataFrame}()
-        Storage_Capacity = Dict{String, DataFrame}()
-
-        for node ∈ NODES
-            Generation_Capacity[node] = DataFrame(
-                [Symbol(tech) => value(generation_capacity[node, tech]) for tech ∈ GEN_TECHS]
-            )
-
-            Storage_Capacity[node] = DataFrame(
-                [Symbol(tech) => value(storage_capacity[node, tech]) for tech ∈ STO_TECHS]
-            )
+        Generation_Investment = DataFrame(NODE = NODES)
+        for tech ∈ GEN_TECHS
+            Generation_Investment[!, Symbol(tech)] = [value(generation_investment[node, tech]) for node ∈ NODES]
         end
+
+        Storage_Investment = DataFrame(NODE = NODES)
+        for tech ∈ STO_TECHS
+            Storage_Investment[!, Symbol(tech)] = [value(storage_investment[node, tech]) for node ∈ NODES]
+        end
+
+        Generation_Investment = sum_capacities(Generation_Investment)
+        Storage_Investment = sum_capacities(Storage_Investment)
 
         # Dispatch solutions
         Generation_Dispatch = Dict{String, DataFrame}()
+        Reactive_Dispatch = Dict{String, DataFrame}()
         Storage_Charge = Dict{String, DataFrame}()
         Storage_Discharge = Dict{String, DataFrame}()
         Storage_Level = Dict{String, DataFrame}()
@@ -240,6 +255,11 @@ including:
             Generation_Dispatch[node] = DataFrame(
                 [value(active_generation[node, tech, t]) for t ∈ PERIODS, tech ∈ GEN_TECHS], 
                 GEN_TECHS
+            )
+
+            Reactive_Dispatch[node] = DataFrame(
+                [value(reactive_generation[node, tech, t]) for t ∈ PERIODS, tech ∈ EL_GEN], 
+                EL_GEN
             )
 
             Storage_Charge[node] = DataFrame(
@@ -253,13 +273,26 @@ including:
             )
 
             Storage_Level[node] = DataFrame(
-                [value(storage_discharge[node, tech, t]) for t in PERIODS, tech in STO_TECHS], 
+                [value(storage_discharge[node, tech, t]) for t ∈ PERIODS, tech ∈ STO_TECHS], 
                 STO_TECHS
             )
         end
 
-        # Import Export solutions
+        # Long DataFrame format for dispatch
+        # for consideration
+        # to adjust accordingly
 
+        combined_df = DataFrame(Node=String[], Tech=String[], Period=Int[], Value=Float64[])
+
+        for (node, df) in Generation_Dispatch
+            for (tech_idx, tech) in enumerate(GEN_TECHS)
+                for period in PERIODS
+                    push!(combined_df, (Node=node, Tech=tech, Period=period,Value=df[period, tech_idx]))
+                end
+            end
+        end
+
+        # Import Export solutions
         Export_to = DataFrame()
         Import_from = DataFrame()
         Export_Import = DataFrame()
@@ -272,22 +305,27 @@ including:
 
         # Voltage
         Nodal_Voltage = DataFrame()
+        Nodal_Angle = DataFrame()
 
         for node ∈ NODES
             Nodal_Voltage[!, Symbol(node)] = [value(nodal_voltage[node, t]) for t ∈ PERIODS]
+            Nodal_Angle[!, Symbol(node)] = [value(nodal_angle[node, t]) for t ∈ PERIODS]
         end
 
         # Power Flow
         Active_Flow = DataFrame()
+        Reactive_Flow = DataFrame()
 
         for line ∈ LINES
             Active_Flow[!, Symbol(line)] = [value(active_flow[line, t]) for t ∈ PERIODS]
+            Reactive_Flow[!, Symbol(line)] = [value(reactive_flow[line, t]) for t ∈ PERIODS]
         end
 
         results =   (; 
-                    Generation_Capacity, 
-                    Storage_Capacity,
+                    Generation_Investment, 
+                    Storage_Investment,
                     Generation_Dispatch,
+                    Reactive_Dispatch,
                     Storage_Charge,
                     Storage_Discharge,
                     Storage_Level,
@@ -295,7 +333,9 @@ including:
                     Import_from,
                     Export_Import,
                     Nodal_Voltage,
-                    Active_Flow
+                    Nodal_Angle,
+                    Active_Flow,
+                    # combined_df
         )
         
         return results
@@ -308,3 +348,4 @@ including:
     end
 
 end
+

@@ -277,7 +277,7 @@ def subs_voronoi(
     voronoi_gdf.set_geometry("geometry", inplace=True, crs="EPSG:4326")
     voronoi_gdf["vor_id"] = range(1, len(voronoi_gdf) + 1) 
     voronoi_gdf = voronoi_gdf.to_crs("EPSG:3006")
-    voronoi_gdf["area_m2"] = voronoi_gdf.area
+    voronoi_gdf["area_m2"] = voronoi_gdf.area / 1e3 # in 1000 m2
     # voronoi_gdf = voronoi_gdf.to_crs("EPSG:4326")
 
     idx_to_node = subs_gdf["node_id"].to_dict()
