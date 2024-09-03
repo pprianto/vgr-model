@@ -337,6 +337,7 @@ current constraints:
         var_om              # in €
         start_part_costs    # in €
         exp_imp_costs       # in €
+        tax_cost            # in €
     end
 
     # define investments of technologies
@@ -354,8 +355,7 @@ current constraints:
     @constraint(model, 
         capex == 
         # generation techs capacity investment costs
-        sum(generation_investment[i, x] * Gentech_data[x].InvCost * CRF_gen[x] for i ∈ NODES, x ∈ GEN_TECHS) +                                          
-        
+        sum(generation_investment[i, x] * Gentech_data[x].InvCost * CRF_gen[x] for i ∈ NODES, x ∈ GEN_TECHS) +
         # storage techs capacity investment costs
         sum(storage_investment[i, s] * Stotech_data[s].InvCost * CRF_sto[s] for i ∈ NODES, s ∈ STO_TECHS)                                             
     )
@@ -365,13 +365,10 @@ current constraints:
         fix_om ==
         # generation tech fix O&M costs, electrolyser defined differently since the fix OM is based on % of investment
         sum(generation_investment[i, x] * Gentech_data[x].FixOM for i ∈ NODES, x ∈ GEN_TECHS if x ∉ EC ) +                                              
-        
         # generation tech fix O&M costs for electrolyser
         sum((generation_investment[i, x] * Gentech_data[x].InvCost * CRF_gen[x]) * Gentech_data[x].FixOM for i ∈ NODES, x ∈ GEN_TECHS if x ∈ EC ) +    
-        
         # storage tech fix O&M costs, vanadium redox defined differently since the fix OM is based on % of investment
         sum(storage_investment[i, s] * Stotech_data[s].FixOM for i ∈ NODES, s ∈ STO_TECHS if s != "VRBAT") +                                            
-        
         # storage tech fix O&M costs for vanadium redox
         sum((storage_investment[i, "VRBAT"] * Stotech_data["VRBAT"].InvCost * CRF_sto["VRBAT"]) * Stotech_data["VRBAT"].FixOM for i ∈ NODES)
     )
@@ -380,10 +377,9 @@ current constraints:
     @constraint(model, 
         fuel_cost == 
         # operational costs for techs that use fuel 
-        sum( sum(active_generation[i, x, t] * Gentech_data[x].FuelPrice for i ∈ NODES, x ∈ GEN_TECHS if x ∉ [HP, EC, "EB"] ) for t ∈ PERIODS) +
-        
+        sum( sum(active_generation[i, x, t] * Gentech_data[x].FuelPrice / Gentech_data[x].Efficiency for i ∈ NODES, x ∈ GEN_TECHS if x ∉ [HP, EC, "EB"] ) for t ∈ PERIODS) +
         # operational costs for HP and electrolyser uses elprice
-        sum( sum(active_generation[i, x, t] * SE3_price[t] for i ∈ NODES, x ∈ GEN_TECHS if x ∈ [HP, EC, "EB"] ) for t ∈ PERIODS)
+        sum( sum(active_generation[i, x, t] * SE3_price[t] / Gentech_data[x].Efficiency for i ∈ NODES, x ∈ GEN_TECHS if x ∈ [HP, EC, "EB"] ) for t ∈ PERIODS)
     )
 
     # variable O/M costs (in €/MWh)
@@ -391,7 +387,6 @@ current constraints:
         var_om ==
         # generation tech variable O&M costs
         sum(active_generation[i, x, t] * Gentech_data[x].VarOM for i ∈ NODES, x ∈ GEN_TECHS, t ∈ PERIODS) +                                             
-        
         # storage tech variable O&M costs 
         sum(storage_discharge[i, s, t] * Stotech_data[s].VarOM for i ∈ NODES, s ∈ STO_TECHS, t ∈ PERIODS)
     )
@@ -401,7 +396,6 @@ current constraints:
         start_part_costs ==
         # startup costs
         sum(gen_startup_cost[i, x, t] for i ∈ NODES, x ∈ FLEX_TH, t ∈ PERIODS) +
-        
         # partload costs
         sum(gen_partload_cost[i, x, t] for i ∈ NODES, x ∈ FLEX_TH, t ∈ PERIODS)
     )
@@ -411,10 +405,18 @@ current constraints:
         exp_imp_costs ==
         # export/import from transmission system
         sum(i ∈ SE3_TRANS_NODES ? import_export[i, t] * SE3_price[t] : 0 for i ∈ NODES, t ∈ PERIODS) +
-        
         sum(i ∈ NO1_TRANS_NODES ? import_export[i, t] * NO1_price[t] : 0 for i ∈ NODES, t ∈ PERIODS) +
-        
         sum(i ∈ DK1_TRANS_NODES ? import_export[i, t] * DK1_price[t] : 0 for i ∈ NODES, t ∈ PERIODS)
+    )
+
+    # taxes by using el for heat (in €/MWh)
+    El_Heat_Tax = 60        # assumed tax in €/MWh for using el to generate heat
+    @constraint(model, 
+        tax_cost ==
+        # taxes for EB
+        sum(El_Heat_Tax * active_generation[i, "EB", t] / Gentech_data["EB"].Efficiency for i ∈ NODES, t ∈ PERIODS) +                                             
+        # taxes for HP 
+        sum(El_Heat_Tax * active_generation[i, x, t] / Gentech_data[x].Alpha for i ∈ NODES, x ∈ HP, t ∈ PERIODS)
     )
 
     # System Cost
@@ -425,66 +427,9 @@ current constraints:
                             fuel_cost +         # in €
                             var_om +            # in €
                             start_part_costs +  # in €
-                            exp_imp_costs       # in €
+                            exp_imp_costs +     # in €
+                            tax_cost            # in €
     )
-
-    # # Not needed anymore
-    # # separate variables should be defined instead
-    # @expressions model begin
-    #     generation_investment[i ∈ NODES, x ∈ GEN_TECHS],
-    #         generation_investment[i, x] - lower_bound(generation_investment[i, x])
-
-    #     storage_investment[i ∈ NODES, s ∈ STO_TECHS],
-    #         storage_investment[i, s] - lower_bound(storage_investment[i, s])
-    # end
-
-    # @constraint(model, SystemCost,
-    #     total_cost ==
-    #     # generation techs capacity investment costs
-    #     sum(generation_investment[i, x] * Gentech_data[x].InvCost * CRF_gen[x] for i ∈ NODES, x ∈ GEN_TECHS) +                                          
-        
-    #     # storage techs capacity investment costs
-    #     sum(storage_investment[i, s] * Stotech_data[s].InvCost * CRF_sto[s] for i ∈ NODES, s ∈ STO_TECHS) +                                             
-        
-    #     # generation tech fix O&M costs, electrolyser defined differently since the fix OM is based on % of investment
-    #     sum(generation_investment[i, x] * Gentech_data[x].FixOM for i ∈ NODES, x ∈ GEN_TECHS if x ∉ EC ) +                                              
-        
-    #     # generation tech fix O&M costs for electrolyser
-    #     sum((generation_investment[i, x] * Gentech_data[x].InvCost * CRF_gen[x]) * Gentech_data[x].FixOM for i ∈ NODES, x ∈ GEN_TECHS if x ∈ EC ) +    
-        
-    #     # storage tech fix O&M costs, vanadium redox defined differently since the fix OM is based on % of investment
-    #     sum(storage_investment[i, s] * Stotech_data[s].FixOM for i ∈ NODES, s ∈ STO_TECHS if s != "VRBAT") +                                            
-        
-    #     # storage tech fix O&M costs for vanadium redox
-    #     sum((storage_investment[i, "VRBAT"] * Stotech_data["VRBAT"].InvCost * CRF_sto["VRBAT"]) * Stotech_data["VRBAT"].FixOM for i ∈ NODES) +
-        
-    #     # operational costs for techs that use fuel 
-    #     sum( sum(active_generation[i, x, t] * Gentech_data[x].FuelPrice / 1e3 for i ∈ NODES, x ∈ GEN_TECHS if x ∉ [HP, EC, "EB"] ) for t ∈ PERIODS) +
-        
-    #     # operational costs for HP and electrolyser uses elprice
-    #     sum( sum(active_generation[i, x, t] * SE3_price[t] / 1e3 for i ∈ NODES, x ∈ GEN_TECHS if x ∈ [HP, EC, "EB"] ) for t ∈ PERIODS) +
-
-    #     # generation tech variable O&M costs
-    #     sum(active_generation[i, x, t] * Gentech_data[x].VarOM for i ∈ NODES, x ∈ GEN_TECHS, t ∈ PERIODS) +                                             
-        
-    #     # storage tech variable O&M costs 
-    #     sum(storage_discharge[i, s, t] * Stotech_data[s].VarOM for i ∈ NODES, s ∈ STO_TECHS, t ∈ PERIODS) +                                            
-        
-    #     # startup costs
-    #     sum(gen_startup_cost[i, x, t] for i ∈ NODES, x ∈ FLEX_TH, t ∈ PERIODS) +
-
-    #     # partload costs
-    #     sum(gen_partload_cost[i, x, t] for i ∈ NODES, x ∈ FLEX_TH, t ∈ PERIODS) +
-
-    #     # export/import from transmission system
-    #     sum(i ∈ SE3_TRANS_NODES ? import_export[i, t] * SE3_price[t] / 1e3 : 0 for i ∈ NODES, t ∈ PERIODS) +
-
-    #     sum(i ∈ NO1_TRANS_NODES ? import_export[i, t] * NO1_price[t] / 1e3 : 0 for i ∈ NODES, t ∈ PERIODS) +
-
-    #     sum(i ∈ DK1_TRANS_NODES ? import_export[i, t] * DK1_price[t] / 1e3 : 0 for i ∈ NODES, t ∈ PERIODS)
-
-    # # TODO: taxes?
-    # )
 
     #=------------------------------------------------------------------------------
     GENERATION LIMITS
@@ -617,13 +562,13 @@ current constraints:
         # active power nodal balance
         @constraint(model, 
             Eldemand_data[t, node] +                                                                                # el demand
-            sum(active_generation[node, x, t] / Gentech_data[x].Efficiency for x ∈ HP) +                            # for HP
+            sum(active_generation[node, x, t] / Gentech_data[x].Alpha for x ∈ HP) +                            # for HP
             sum(active_generation[node, x, t] / Gentech_data[x].Efficiency for x ∈ BOILER) +                        # for boilers
-            sum(active_generation[node, x, t] for x ∈ EC) +                                                         # for electrolyser / H2 demand
+            sum(active_generation[node, x, t] / Gentech_data[x].Efficiency for x ∈ EC) +                                                         # for electrolyser / H2 demand
             sum(storage_charge[node, s, t] for s ∈ EL_STO) +                                                        # charge battery
             sum(storage_charge[node, s, t] for s ∈ H2_STO) +                                                        # charge  h2 storage
             p_exit ≤                                                                                                # el flow to other nodes
-            sum(active_generation[node, x, t] * Gentech_data[x].Efficiency for x ∈ EL_GEN) +                        # el generation (active)
+            sum(active_generation[node, x, t] for x ∈ EL_GEN) +                        # el generation (active)
             sum(storage_discharge[node, s, t] for s ∈ EL_STO) +                                                     # battery discharge
             sum(active_generation[node, x, t] for x ∈ FC) +                                  # this applies for Fuel Cell (H2 -> EL)
             p_enter +                                                                                               # el flow to this node
@@ -647,7 +592,7 @@ current constraints:
         @constraint(model,
             # efficiencies / el-heat conversion rate for HP and Boilers have been considered in el balance therefore not included
             Heatdemand_data[t, node] +
-            sum(storage_charge[node, s, t] * Stotech_data[s].Ch_eff for s ∈ HEAT_STO) ≤        # charging heat storage
+            sum(storage_charge[node, s, t] for s ∈ HEAT_STO) ≤                                 # charging heat storage
             sum(active_generation[node, x, t] / Gentech_data[x].Alpha for x ∈ CHP) +           # generation from heat techs, CHP if with alpha
             sum(active_generation[node, x, t] for x ∈ HP) +                                    # for HP
             sum(active_generation[node, x, t] for x ∈ BOILER) +                                # for boilers            
@@ -662,7 +607,7 @@ current constraints:
         # H2 pipe flow equations would come here if there is any...
         @constraint(model,
             H2demand_data[t, node] +
-            sum(storage_charge[node, s, t] * Stotech_data[s].Ch_eff for s ∈ H2_STO) +          # charging heat storage
+            sum(storage_charge[node, s, t] for s ∈ H2_STO) +                                   # charging heat storage
             sum(active_generation[node, x, t] / Gentech_data[x].Efficiency for x ∈ FC) ≤       # fuel cell to convert h2 - el
             sum(active_generation[node, x, t] * Gentech_data[x].Efficiency for x ∈ EC) +       # electrolyser to convert el - h2
             sum(storage_discharge[node, s, t] for s ∈ H2_STO)                                  # discharge from H2 storage
@@ -730,11 +675,11 @@ current constraints:
     # CO2 limits and constraints in tonne
     # 2050 assumes net zero is achieved
     @constraint(model,
-        sum(active_generation[i, x, t] * Gentech_data[x].Emission for i ∈ NODES, x ∈ GEN_TECHS, t ∈ PERIODS) + 
+        sum(active_generation[i, x, t] * Gentech_data[x].Emission / Gentech_data[x].Efficiency for i ∈ NODES, x ∈ GEN_TECHS, t ∈ PERIODS) + 
         # sum(storage_discharge[i, s, t] * Stotech_data[s].Emission for i ∈ NODES, s ∈ STO_TECHS, t ∈ PERIODS) +
         sum(gen_startup_CO2[i, x, t] for i ∈ NODES, x ∈ FLEX_TH, t ∈ PERIODS) +
         sum(gen_partload_CO2[i, x, t] for i ∈ NODES, x ∈ FLEX_TH, t ∈ PERIODS) ≤
-        100000                                                                                      
+        0                                                                                      
     )
 
     Vars = (; 
@@ -832,15 +777,16 @@ function set_gen_bounds(
     # EQ (8) #
     # limits of area for each node based on Voronoi cell
     # assume 10% of the available area in 1000 m2
+    # need to be better represented!!
     node_area = Dict(row.node_id => row.area_m2 for row ∈ eachrow(grid_infra.subs))
 
-    for node ∈ NODES
-        @constraint(model,
-            sum(( existing_generation[node, gen_tech] + generation_investment[node, gen_tech] ) * Gentech_data[gen_tech].Space_m2 for gen_tech ∈ GEN_TECHS) +
-            sum(storage_investment[node, sto_tech] * Stotech_data[sto_tech].Space_m2 for sto_tech ∈ STO_TECHS) ≤ 
-            node_area[node] #* 0.1
-        )
-    end
+    # for node ∈ NODES
+    #     @constraint(model,
+    #         sum(( existing_generation[node, gen_tech] + generation_investment[node, gen_tech] ) * Gentech_data[gen_tech].Space_m2 for gen_tech ∈ GEN_TECHS) +
+    #         sum(storage_investment[node, sto_tech] * Stotech_data[sto_tech].Space_m2 for sto_tech ∈ STO_TECHS) ≤ 
+    #         node_area[node] #* 0.1
+    #     )
+    # end
     
     # nodes not in coastal municipalities not eligible for offshore wind farms
     for node ∈ NODES, t ∈ PERIODS
