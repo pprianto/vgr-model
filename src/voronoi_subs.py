@@ -381,6 +381,7 @@ if __name__ == "__main__":
     savefile(subs_gdf, "subs_final", model_input)
     savefile(lines_gdf, "lines_final", model_input)
     savefile(pp_gdf, "pp_final", model_input)
+    savefile(voronoi_gdf, "voronoi_cells", model_input)
 
     # plot the map
     vormap(

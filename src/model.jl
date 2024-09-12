@@ -1,10 +1,11 @@
 function run_Model(
-    model::Model,
-    price::NamedTuple,
-    grid_infra::NamedTuple,
-    tech_props::NamedTuple,
-    demand::NamedTuple,
-    profiles::NamedTuple   
+    # model::Model,
+    # price::NamedTuple,
+    # grid_infra::NamedTuple,
+    # tech_props::NamedTuple,
+    # demand::NamedTuple,
+    # profiles::NamedTuple,
+    # options=ModelOptions()
 )
 #=------------------------------------------------------------------------------
 -------------------------------- MODEL -----------------------------------------
@@ -22,17 +23,21 @@ Return:
 2. Results in NamedTuple
 
 ------------------------------------------------------------------------------=#
+
+    model = Model()
+
+    #=---------------------------------------------
+    INPUT DATA
+    ---------------------------------------------=#
     println("---------------------------------------------")
     println("Read input data")
     println("---------------------------------------------")
+
+    price, grid_infra, tech_props, demand, profiles = read_input_data()
+
     start_sets = time()
 
-    sets, params = make_Params_Sets(
-        price,
-        grid_infra,
-        tech_props,
-        demand
-    )
+    @time sets, params = make_sets(price, grid_infra, tech_props, demand)
 
     time_sets = time()-start_sets  
 
@@ -46,11 +51,7 @@ Return:
     println("---------------------------------------------")
     start_vars = time()
 
-    vars = make_Variables(
-        model,
-        sets,
-        params
-    )
+    @time vars = make_variables(model, sets, params)
 
     time_vars = time()-start_vars  
     println("---------------------------------------------")
@@ -63,14 +64,11 @@ Return:
     println("---------------------------------------------")
     start_const = time()
 
-    vars = make_Constraints(
-        model,
-        sets,
-        params,
-        vars,
-        grid_infra,
-        profiles
-    )
+    @time cost_constraints(model, sets, params, vars, grid_infra, profiles)
+    @time gen_constraints(model, sets, params, vars, grid_infra, profiles)
+    @time sto_constraints(model, sets, params, vars)
+    @time enbal_constraints(model, sets, params, vars, grid_infra, profiles)
+    @time power_flow_constraints(model, sets, params, vars, grid_infra, profiles)
 
     time_consts = time()-start_const  
     println("---------------------------------------------")
@@ -78,27 +76,24 @@ Return:
     println("---------------------------------------------")
 
     #------------------------------------------------------------------------------=#    
-    @unpack total_cost = vars
-
-    @objective model Min begin
-        total_cost
-    end
 
     println("---------------------------------------------")
     println("Start Solving")
     println("---------------------------------------------")
     start_solve = time()
 
+    set_solver(model)
+
     optimize!(model)
 
-    if model == Model(Gurobi.Optimizer)
-        compute_conflict!(model)
+    # if model == Model(Gurobi.Optimizer)
+    #     compute_conflict!(model)
 
-        if get_attribute(model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
-            iis_model, _ = copy_conflict(model)
-            print(iis_model)
-        end
-    end
+    #     if get_attribute(model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
+    #         iis_model, _ = copy_conflict(model)
+    #         print(iis_model)
+    #     end
+    # end
     
     time_solve = time()-start_solve  
     println("---------------------------------------------")
@@ -109,12 +104,6 @@ Return:
     RETURN
     ------------------------------------------------------------------------------=#  
 
-    # results = query_solutions(
-    #     model,
-    #     sets,
-    #     vars
-    # )
-
     times = (;
             time_sets,
             time_vars,
@@ -122,25 +111,100 @@ Return:
             time_solve
     )
 
-    model_struct = Model_Struct(
-                                model,
-                                sets,
-                                params,
-                                vars,
-                                times
-    )
+    model_struct = ModelStruct(model, sets, params, vars, times)
     
     return model_struct
 
-    # return model, results, times
+end
+
+
+function read_input_data(
+    # options=ModelOptions()
+)
+    # electricity price
+    elpris_df = read_file(joinpath(input_dir, "elpris.csv"))
+
+    # electrical infrastructure
+    substations_df = read_file(joinpath(input_dir, "subs_final.csv"))
+    lines_df = read_file(joinpath(input_dir, "lines_final.csv"))
+    pp_df = read_file(joinpath(input_dir, "pp_final.csv"))
+    pp_df = rename_pp(pp_df)                                                                    # rename the tech according to the index sets
+
+    # technology properties
+    # assume 2050
+    gen_tech_df = read_file(joinpath(input_dir, "gen_tech_$(options.target_year).csv"))
+    sto_tech_df = read_file(joinpath(input_dir, "sto_tech_$(options.target_year).csv"))
+
+    # demand data
+    # currently in hourly period
+    el_demand_df = read_file(joinpath(input_dir, "el_nodal_demand.csv"))
+    heat_demand_df = read_file(joinpath(input_dir, "heat_nodal_demand.csv"))
+    h2_demand_df = read_file(joinpath(input_dir, "h2_nodal_demand.csv"))
+
+    # RE profile
+    PV_fix_profile = read_file(joinpath(input_dir, "nodal_profile_pv_fixed_$(options.profile_year).csv"))          # fixed axis pv
+    PV_opt_profile = read_file(joinpath(input_dir, "nodal_profile_pv_double_axis_$(options.profile_year).csv"))    # opt tracking pv
+    WT_on_profile = read_file(joinpath(input_dir, "nodal_profile_onshore_wind_$(options.profile_year).csv"))       # onshore wind
+    WT_off_profile = read_file(joinpath(input_dir, "nodal_profile_offshore_wind_$(options.profile_year).csv"))     # offshore wind
+
+    # collections of input data in NamedTuple
+    # price = (; SE3=Array(elpris_df.SE3), NO1=Array(elpris_df.NO1), DK1=Array(elpris_df.DK1))
+    # grid_infra = (; subs=substations_df, lines=lines_df, pp=pp_df)
+    # tech_props = (; gen=gen_tech_df, sto=sto_tech_df)
+    # demand = (; el=el_demand_df, heat=heat_demand_df, h2=h2_demand_df)
+    # profiles = (; PVfix=PV_fix_profile, PVopt=PV_opt_profile, WTon=WT_on_profile, WToff=WT_off_profile)
+
+    # collections of input data in Struct
+    price = Prices(Array(elpris_df.SE3), Array(elpris_df.NO1), Array(elpris_df.DK1))
+    grid_infra = GridInfrastructures(substations_df, lines_df, pp_df)
+    tech_props = TechProps(gen_tech_df, sto_tech_df)
+    demand = Demands(el_demand_df, heat_demand_df, h2_demand_df)
+    profiles = Profiles(PV_fix_profile, PV_opt_profile, WT_on_profile, WT_off_profile)
+
+    return price, grid_infra, tech_props, demand, profiles
+
+end
+
+
+function set_solver(model, solver=:gurobi)
+
+    if solver == :gurobi
+        # Workaround for bug:
+        # https://discourse.julialang.org/t/how-can-i-clear-solver-attributes-in-jump/57953
+        optimizer = optimizer_with_attributes(
+                Gurobi.Optimizer,
+                # "Threads" => Threads.nthreads(),  # shutoff for now, memory limit?
+                "BarHomogeneous" => 1,              # 1: enabled
+                "Crossover" => 0,                  # 0: disabled
+                # "CrossoverBasis" => 0,                  # 0: disabled
+                # "BarConvTol" => 1e-6,                  # 0: disabled
+                "Method" => 2,                     # -1: auto, 1: dual simplex
+                "Presolve" => 2,                    # 2: aggressive
+                "PreSparsify" => 2,                    # 2: aggressive
+                # "NumericFocus" => 2,
+        )
+        
+        set_optimizer(model, optimizer)
+ 
+        # set_silent(model)
+        # log_file = joinpath(results_dir, "barrier_no_crossover_log.txt")
+        # set_optimizer_attribute(model, "LogFile", log_file)
+
+    elseif solver == :highs
+        optimizer = optimizer_with_attributes(HiGHS.Optimizer)
+        set_optimizer(model, optimizer)
+
+    else
+        @error "No solver named $(solver)."
+    end
 
 end
 
 
 function query_solutions(
     model::Model,
-    sets::NamedTuple,
-    vars::NamedTuple
+    sets::ModelSets,
+    vars::ModelVariables,
 )
 #=------------------------------------------------------------------------------
 ---------------------------- QUERY SOLUTIONS -----------------------------------

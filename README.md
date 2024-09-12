@@ -22,7 +22,7 @@ The Julia scripts provide the core optimization of the model <br/>
 The model takes input data from ```\modelinput```, which currently still is dummy data <br/>
 As the script name suggests, each script contains the following:
 
-+ main script to run the model ([rm_Main.jl](src/rm_Main.jl))
-+ read input data and define Sets and Paramaters of the model ([rm_Params_Sets.jl](src/rm_Params_Sets.jl))
-+ define Variables and Constraints of the model ([rm_Vars_Consts.jl](src/rm_Vars_Consts.jl))
-+ functions for other uses ([rm_Utilities.jl](src/rm_Utilities.jl))
++ main script to run the model ([main.jl](src/main.jl))
++ read input data and define Sets and Paramaters of the model ([params_sets.jl](src/params_sets.jl))
++ define Variables and Constraints of the model ([vars_consts.jl](src/vars_consts.jl))
++ functions for other uses ([utilities.jl](src/utilities.jl))
