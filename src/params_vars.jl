@@ -3,7 +3,6 @@ function make_sets(
     grid_infra::GridInfrastructures,
     tech_props::TechProps,
     demand::Demands,
-    # run::Symbol
 )
 
 #=------------------------------------------------------------------------------
@@ -341,3 +340,308 @@ Return
     return  sets, params
 
 end
+
+
+function make_variables(
+    model::Model,
+    sets::ModelSets,
+    params::ModelParameters
+)
+
+#=------------------------------------------------------------------------------
+------------------------------ VARIABLES ---------------------------------------
+
+Define Variables of the model
+current variables:
+1. generation and storage capacity
+2. generation and storage dispatch
+3. power flow
+4. voltage level
+5. import/export
+6. ...
+
+------------------------------------------------------------------------------=#
+    ## Sets and parameters
+
+    @unpack NODES, 
+            TRANSMISSION_NODES,
+            GEN_TECHS, 
+            EL_GEN, 
+            # HEAT_GEN, 
+            # H2_GEN, 
+            STO_TECHS, 
+            PERIODS, 
+            LINES, 
+            FLEX_TH = sets
+    
+    @unpack Lines_props = params
+            # Vnom = params
+
+    #=------------------------------------------------------------------------------
+    MODEL VARIABLES
+    ------------------------------------------------------------------------------=#
+
+    # Cost-related variables
+    # all free variables
+    @variables model begin
+        total_cost          # in k€
+        capex               # in k€
+        fix_om              # in k€
+        fuel_cost           # in €
+        var_om              # in €
+        start_part_costs    # in €
+        exp_imp_costs       # in €
+        tax_cost            # in €
+    end
+
+    #=------------------------------------------------------------------------------
+    GENERATION AND STORAGE VARIABLES
+    ------------------------------------------------------------------------------=#
+    # EQ (2) - (7) #
+    # Generation and Storage Capacities (MW)
+    # upper and lower bounds for generation capaicity is defined in set_gen_bounds function
+    @variables model begin
+        existing_generation[i ∈ NODES, x ∈ GEN_TECHS] ≥ 0
+    end
+    
+    @variables model begin
+        generation_investment[i ∈ NODES, x ∈ GEN_TECHS]   ≥ 0
+        storage_investment[i ∈ NODES, s ∈ STO_TECHS]      ≥ 0
+    end
+    
+    # Active and Reactive power dispatch (MWh or MVArh)
+    # reactive generation is assumed only applies for electricity generation technologies
+    @variables model begin
+        active_generation[t ∈ PERIODS, i ∈ NODES, x ∈ GEN_TECHS]  ≥ 0
+        reactive_generation[t ∈ PERIODS, i ∈ NODES, x ∈ EL_GEN]   ≥ 0
+    end
+
+    # Storage-related variables (MWh)
+    @variables model begin
+        storage_charge[t ∈ PERIODS, i ∈ NODES, s ∈ STO_TECHS]     ≥ 0
+        storage_discharge[t ∈ PERIODS, i ∈ NODES, s ∈ STO_TECHS]  ≥ 0
+        storage_level[t ∈ PERIODS, i ∈ NODES, s ∈ STO_TECHS]      ≥ 0
+    end
+
+    #=------------------------------------------------------------------------------
+    TWO-VARIABLE APPROACH VARIABLES
+    ------------------------------------------------------------------------------=#
+    # applies to thermal power plants
+    # related to start up / ramping limits
+    # based on Lisa's thesis
+    # only applicable if Flexlim option is enabled
+    if options.FlexLim == :yes
+        @variables model begin
+            generation_spin[t ∈ PERIODS, i ∈ NODES, x ∈ FLEX_TH]      ≥ 0
+            generation_on[t ∈ PERIODS, i ∈ NODES, x ∈ FLEX_TH]        ≥ 0
+            gen_startup_cost[t ∈ PERIODS, i ∈ NODES, x ∈ FLEX_TH]     ≥ 0
+            gen_partload_cost[t ∈ PERIODS, i ∈ NODES, x ∈ FLEX_TH]    ≥ 0
+            gen_startup_CO2[t ∈ PERIODS, i ∈ NODES, x ∈ FLEX_TH]      ≥ 0
+            gen_partload_CO2[t ∈ PERIODS, i ∈ NODES, x ∈ FLEX_TH]     ≥ 0
+        end
+    end
+
+    #=------------------------------------------------------------------------------
+    EXPORT - IMPORT VARIABLES
+    EQ (38)
+    ------------------------------------------------------------------------------=#
+    # EQ (33) - (35) #
+    # export and import to/from transmission system
+    # ideally limited by transformer size (200 - 300 MVA would be reasonable for transmission transformer)
+    # and perhaps trading regulations?
+    @variables model begin
+            import_export[t ∈ PERIODS, i ∈ TRANSMISSION_NODES]    ≥ 0
+        0 ≤ export_to[t ∈ PERIODS, i ∈ TRANSMISSION_NODES]        ≤ 300
+        0 ≤ import_from[t ∈ PERIODS, i ∈ TRANSMISSION_NODES]      ≤ 300
+    end
+
+    # import-export constraints
+    # note: import_export is used to simplify nodal balance and objective function
+    # when import_export ≥ 0, then the nodes are importing and imposed to trade cost (elprice)
+    # otherwise, then the nodes are exporting and gain from trade cost (elprice)
+    @constraint(model, 
+                Trade[t ∈ PERIODS, i ∈ TRANSMISSION_NODES],
+                import_export[t, i] == import_from[t, i] - export_to[t, i]
+    )
+
+    #=------------------------------------------------------------------------------
+    VOLTAGE VARIABLES
+    EQ (38)
+    ------------------------------------------------------------------------------=#
+    # voltage nominal and angles (in kV for voltage magnitude, degree for angle)
+    # first nodes is excluded since it is considered slack bus
+    @variables model begin
+        0.9 * options.Vnom ≤ nodal_voltage[t ∈ PERIODS, i ∈ NODES] ≤ 1.1 * options.Vnom 
+        -360 ≤ nodal_angle[t ∈ PERIODS, i ∈ NODES] ≤ 360
+    end
+
+    # Slack bus voltage and angle over time, assumes the first entry as slack
+
+    for t ∈ PERIODS
+        fix(nodal_voltage[t, NODES[1]], 
+            options.Vnom,
+            force=true
+        )
+
+        fix(nodal_angle[t, NODES[1]], 
+            0.0,
+            force=true
+        )
+
+    end
+
+    #=------------------------------------------------------------------------------
+    POWER FLOW VARIABLES
+    EQ (40) - (41)
+    ------------------------------------------------------------------------------=#
+    # applied to lines and node from/to sets
+    # since the flow can only be exist in power lines
+    # but nodes still need to be taken into account
+    # refer to Allard et el. (2020) eq. (4) - (7)
+    # https://doi.org/10.1016/j.apenergy.2020.114958
+
+    # apparent power limits
+    @variables model begin
+        -Lines_props[l][:s_max] ≤ active_flow[t ∈ PERIODS, l ∈ LINES]     ≤ Lines_props[l][:s_max]
+        -Lines_props[l][:s_max] ≤ reactive_flow[t ∈ PERIODS, l ∈ LINES]   ≤ Lines_props[l][:s_max]
+    end
+
+
+
+    #=------------------------------------------------------------------------------
+    EV-RELATED VARIABLES
+    MARIA'S MODEL
+    ------------------------------------------------------------------------------=#
+    # only applicable if EV option is enabled
+    if options.EV == :yes
+        @variables model begin
+            pev_charging_slow[t ∈ PERIODS, i ∈ NODES] ≥ 0   # charging of the vehicle battery [MWh per hour]
+            pev_discharge_net[t ∈ PERIODS, i ∈ NODES] ≥ 0   # Discharging of the vehicle battery back to the electricity grid [kWh per hour]
+            pev_storage[t ∈ PERIODS, i ∈ NODES] ≥ 0         # Storage level of the vehicle battery [MWh per hour]
+            pev_need[t ∈ PERIODS, i ∈ NODES] ≥ 0            # vehicle kilometers not met by charging [MWh per hour]
+        end
+    end
+
+    #=------------------------------------------------------------------------------
+    Return
+    ------------------------------------------------------------------------------=#
+
+    if options.FlexLim == :yes && options.EV == :yes
+
+    return  ModelVariables( 
+            total_cost,
+            capex,
+            fix_om,
+            fuel_cost,
+            var_om,
+            start_part_costs,
+            exp_imp_costs,
+            tax_cost,
+            existing_generation,
+            generation_investment,
+            storage_investment,
+            active_generation,
+            reactive_generation,
+            generation_spin,
+            generation_on,
+            gen_startup_cost,
+            gen_partload_cost,
+            gen_startup_CO2,
+            gen_partload_CO2,
+            storage_charge,
+            storage_discharge,
+            storage_level,
+            nodal_voltage,
+            nodal_angle,
+            import_export,
+            export_to,
+            import_from,
+            active_flow,
+            reactive_flow,
+            pev_charging_slow,       
+            pev_discharge_net,       
+            pev_storage,             
+            pev_need,                
+    )
+
+    elseif options.FlexLim == :yes && options.EV == :no
+
+    return  ModelVariables( 
+            total_cost,
+            capex,
+            fix_om,
+            fuel_cost,
+            var_om,
+            start_part_costs,
+            exp_imp_costs,
+            tax_cost,
+            existing_generation,
+            generation_investment,
+            storage_investment,
+            active_generation,
+            reactive_generation,
+            generation_spin,
+            generation_on,
+            gen_startup_cost,
+            gen_partload_cost,
+            gen_startup_CO2,
+            gen_partload_CO2,
+            storage_charge,
+            storage_discharge,
+            storage_level,
+            nodal_voltage,
+            nodal_angle,
+            import_export,
+            export_to,
+            import_from,
+            active_flow,
+            reactive_flow,
+            nothing,       
+            nothing,       
+            nothing,             
+            nothing,                
+    )
+
+    else
+
+    return  ModelVariables( 
+            total_cost,
+            capex,
+            fix_om,
+            fuel_cost,
+            var_om,
+            start_part_costs,
+            exp_imp_costs,
+            tax_cost,
+            existing_generation,
+            generation_investment,
+            storage_investment,
+            active_generation,
+            reactive_generation,
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+            storage_charge,
+            storage_discharge,
+            storage_level,
+            nodal_voltage,
+            nodal_angle,
+            import_export,
+            export_to,
+            import_from,
+            active_flow,
+            reactive_flow,
+            nothing,       
+            nothing,       
+            nothing,             
+            nothing,                
+    )
+
+    end
+
+
+
+end         # end make_Variables

@@ -8,10 +8,6 @@ such as:
 3. etc...
 
 ------------------------------------------------------------------------------=#
-
-using DataFrames, AxisArrays, CSV, XLSX, UnPack, JuMP, HiGHS
-
-
 function get_df(
     data
 )
@@ -352,3 +348,55 @@ function basic_barchart(
     )
 
 end
+
+
+# Function to parse the .INC file
+# convert GAMS EV .INC files into CSV
+# this currently used for converting fleet availability .inc files
+function parse_inc_file(inc_file::String)
+    data = []
+    open(inc_file, "r") do file
+        for line in eachline(file)
+            line = strip(line)
+            # Skip comments and empty lines
+            if isempty(line) || startswith(line, "*") # || startswith(line, "$")
+                continue
+            end
+            # Assuming the data is space-separated or comma-separated
+            row = split(line)
+            if length(row) == 2
+                push!(data, parse(Float64, row[2]))
+            end
+        end
+    end
+    return Float64.(data)
+end
+
+function combine_fleetava()
+
+    # to adjust accordingly
+    home_file = "fleetava_home_AGG.INC"  # Path to your .INC file
+    data_home = parse_inc_file(home_file)
+
+    h1_file = "fleetava_1h_AGG.INC"  # Path to your .INC file
+    data_h1 = parse_inc_file(h1_file)
+
+    h3_file = "fleetava_3h_AGG.INC"  # Path to your .INC file
+    data_h3 = parse_inc_file(h3_file)
+
+    h6_file = "fleetava_6h_AGG.INC"  # Path to your .INC file
+    data_h6 = parse_inc_file(h6_file)
+
+    fleet_df = DataFrame(
+    :fleet_home => data_home,
+    :fleet_h6 => data_h6,
+    :fleet_h3 => data_h3,
+    :fleet_h1 => data_h1,
+    )
+
+    CSV.write(joinpath(input_dir, "fleet_availability.csv"), fleet_df)
+
+    return fleet_df
+
+end
+

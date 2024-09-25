@@ -1,205 +1,3 @@
-function make_variables(
-    model::Model,
-    sets::ModelSets,
-    params::ModelParameters
-)
-
-#=------------------------------------------------------------------------------
------------------------------- VARIABLES ---------------------------------------
-
-Define Variables of the model
-current variables:
-1. generation and storage capacity
-2. generation and storage dispatch
-3. power flow
-4. voltage level
-5. import/export
-6. ...
-
-------------------------------------------------------------------------------=#
-    ## Sets and parameters
-
-    @unpack NODES, 
-            TRANSMISSION_NODES,
-            GEN_TECHS, 
-            EL_GEN, 
-            # HEAT_GEN, 
-            # H2_GEN, 
-            STO_TECHS, 
-            PERIODS, 
-            LINES, 
-            FLEX_TH = sets
-    
-    @unpack Lines_props = params
-            # Vnom = params
-
-    #=------------------------------------------------------------------------------
-    MODEL VARIABLES
-    ------------------------------------------------------------------------------=#
-
-    # Cost-related variables
-    # all free variables
-    @variables model begin
-        total_cost          # in k€
-        capex               # in k€
-        fix_om              # in k€
-        fuel_cost           # in €
-        var_om              # in €
-        start_part_costs    # in €
-        exp_imp_costs       # in €
-        tax_cost            # in €
-    end
-
-    #=------------------------------------------------------------------------------
-    GENERATION AND STORAGE VARIABLES
-    ------------------------------------------------------------------------------=#
-    # EQ (2) - (7) #
-    # Generation and Storage Capacities (MW)
-    # upper and lower bounds for generation capaicity is defined in set_gen_bounds function
-    @variables model begin
-        existing_generation[i ∈ NODES, x ∈ GEN_TECHS] ≥ 0
-    end
-    
-    @variables model begin
-        generation_investment[i ∈ NODES, x ∈ GEN_TECHS]   ≥ 0
-        storage_investment[i ∈ NODES, s ∈ STO_TECHS]      ≥ 0
-    end
-    
-    # Active and Reactive power dispatch (MWh or MVArh)
-    # reactive generation is assumed only applies for electricity generation technologies
-    @variables model begin
-        active_generation[t ∈ PERIODS, i ∈ NODES, x ∈ GEN_TECHS]  ≥ 0
-        reactive_generation[t ∈ PERIODS, i ∈ NODES, x ∈ EL_GEN]   ≥ 0
-    end
-
-    # Storage-related variables (MWh)
-    @variables model begin
-        storage_charge[t ∈ PERIODS, i ∈ NODES, s ∈ STO_TECHS]     ≥ 0
-        storage_discharge[t ∈ PERIODS, i ∈ NODES, s ∈ STO_TECHS]  ≥ 0
-        storage_level[t ∈ PERIODS, i ∈ NODES, s ∈ STO_TECHS]      ≥ 0
-    end
-
-    #=------------------------------------------------------------------------------
-    TWO-VARIABLE APPROACH VARIABLES
-    ------------------------------------------------------------------------------=#
-    # applies to thermal power plants
-    # related to start up / ramping limits
-    # based on Lisa's thesis
-    @variables model begin
-        generation_spin[t ∈ PERIODS, i ∈ NODES, x ∈ FLEX_TH]      ≥ 0
-        generation_on[t ∈ PERIODS, i ∈ NODES, x ∈ FLEX_TH]        ≥ 0
-        gen_startup_cost[t ∈ PERIODS, i ∈ NODES, x ∈ FLEX_TH]     ≥ 0
-        gen_partload_cost[t ∈ PERIODS, i ∈ NODES, x ∈ FLEX_TH]    ≥ 0
-        gen_startup_CO2[t ∈ PERIODS, i ∈ NODES, x ∈ FLEX_TH]      ≥ 0
-        gen_partload_CO2[t ∈ PERIODS, i ∈ NODES, x ∈ FLEX_TH]     ≥ 0
-    end
-
-    #=------------------------------------------------------------------------------
-    EXPORT - IMPORT VARIABLES
-    EQ (38)
-    ------------------------------------------------------------------------------=#
-    # EQ (33) - (35) #
-    # export and import to/from transmission system
-    # ideally limited by transformer size (200 - 300 MVA would be reasonable for transmission transformer)
-    # and perhaps trading regulations?
-    @variables model begin
-            import_export[t ∈ PERIODS, i ∈ TRANSMISSION_NODES]    ≥ 0
-        0 ≤ export_to[t ∈ PERIODS, i ∈ TRANSMISSION_NODES]        ≤ 300
-        0 ≤ import_from[t ∈ PERIODS, i ∈ TRANSMISSION_NODES]      ≤ 300
-    end
-
-    # import-export constraints
-    # note: import_export is used to simplify nodal balance and objective function
-    # when import_export ≥ 0, then the nodes are importing and imposed to trade cost (elprice)
-    # otherwise, then the nodes are exporting and gain from trade cost (elprice)
-    @constraint(model, 
-                Trade[t ∈ PERIODS, i ∈ TRANSMISSION_NODES],
-                import_export[t, i] == import_from[t, i] - export_to[t, i]
-    )
-
-    #=------------------------------------------------------------------------------
-    VOLTAGE VARIABLES
-    EQ (38)
-    ------------------------------------------------------------------------------=#
-    # voltage nominal and angles (in kV for voltage magnitude, degree for angle)
-    # first nodes is excluded since it is considered slack bus
-    @variables model begin
-        0.9 * options.Vnom ≤ nodal_voltage[t ∈ PERIODS, i ∈ NODES] ≤ 1.1 * options.Vnom 
-        nodal_angle[t ∈ PERIODS, i ∈ NODES]
-    end
-
-    # Slack bus voltage and angle over time, assumes the first entry as slack
-
-    for t ∈ PERIODS
-        fix(nodal_voltage[t, NODES[1]], 
-            options.Vnom,
-            force=true
-        )
-
-        fix(nodal_angle[t, NODES[1]], 
-            0.0,
-            force=true
-        )
-
-    end
-
-    #=------------------------------------------------------------------------------
-    POWER FLOW VARIABLES
-    EQ (40) - (41)
-    ------------------------------------------------------------------------------=#
-    # applied to lines and node from/to sets
-    # since the flow can only be exist in power lines
-    # but nodes still need to be taken into account
-    # refer to Allard et el. (2020) eq. (4) - (7)
-    # https://doi.org/10.1016/j.apenergy.2020.114958
-
-    # apparent power limits
-    @variables model begin
-        -Lines_props[l][:s_max] ≤ active_flow[t ∈ PERIODS, l ∈ LINES]     ≤ Lines_props[l][:s_max]
-        -Lines_props[l][:s_max] ≤ reactive_flow[t ∈ PERIODS, l ∈ LINES]   ≤ Lines_props[l][:s_max]
-    end
-
-    #=------------------------------------------------------------------------------
-    Return
-    ------------------------------------------------------------------------------=#
-
-    vars =  ModelVariables( 
-            total_cost,
-            capex,
-            fix_om,
-            fuel_cost,
-            var_om,
-            start_part_costs,
-            exp_imp_costs,
-            tax_cost,
-            existing_generation,
-            generation_investment,
-            storage_investment,
-            active_generation,
-            reactive_generation,
-            generation_spin,
-            generation_on,
-            gen_startup_cost,
-            gen_partload_cost,
-            gen_startup_CO2,
-            gen_partload_CO2,
-            storage_charge,
-            storage_discharge,
-            storage_level,
-            nodal_voltage,
-            nodal_angle,
-            import_export,
-            export_to,
-            import_from,
-            active_flow,
-            reactive_flow
-    )
-
-    return vars
-
-end         # end make_Variables
-
-
 function cost_constraints(
     model::Model,
     sets::ModelSets,
@@ -332,7 +130,7 @@ current constraints:
 
     # CAPEX costs (in k€/MW)
     @constraint(model, 
-        capex == 
+        capex ≥ 
         # generation techs capacity investment costs
         sum( 
             sum(generation_investment[i, x] * Gentech_data[x].InvCost * CRF_gen[x] for x ∈ GEN_TECHS) +
@@ -343,7 +141,7 @@ current constraints:
 
     # fix O&M costs (in k€/MW)
     @constraint(model, 
-        fix_om ==
+        fix_om ≥
         # generation tech fix O&M costs, electrolyser defined differently since the fix OM is based on % of investment
         sum(
             sum(generation_investment[i, x] * Gentech_data[x].FixOM for x ∈ GEN_TECHS if x ∉ EC ) +                                              
@@ -358,7 +156,7 @@ current constraints:
 
     # fuel costs (in €/MWh)
     @constraint(model, 
-        fuel_cost == 
+        fuel_cost ≥ 
         # operational costs for techs that use fuel 
         sum( 
             sum(
@@ -371,7 +169,7 @@ current constraints:
 
     # variable O/M costs (in €/MWh)
     @constraint(model, 
-        var_om ==
+        var_om ≥
         # generation tech variable O&M costs
         sum( 
             sum( 
@@ -383,21 +181,23 @@ current constraints:
     )
 
     # start-up/part load costs (in €/MWh)
-    @constraint(model, 
-        start_part_costs ==
-        # startup costs
-        sum(
+    if options.FlexLim == :yes
+        @constraint(model, 
+            start_part_costs ≥
+            # startup costs
             sum(
-                sum(gen_startup_cost[t, i, x] for x ∈ FLEX_TH) +
-                # partload costs
-                sum(gen_partload_cost[t, i, x] for x ∈ FLEX_TH)
-            for i ∈ NODES)
-        for t ∈ PERIODS)
-    )
+                sum(
+                    sum(gen_startup_cost[t, i, x] for x ∈ FLEX_TH) +
+                    # partload costs
+                    sum(gen_partload_cost[t, i, x] for x ∈ FLEX_TH)
+                for i ∈ NODES)
+            for t ∈ PERIODS)
+        )
+    end
 
     # import/export costs (in €/MWh)
     @constraint(model, 
-        exp_imp_costs ==
+        exp_imp_costs ≥
         # export/import from transmission system
         sum( 
             sum(i ∈ SE3_TRANS_NODES ? import_export[t, i] * SE3_price[t] : 0 for i ∈ NODES) +
@@ -407,30 +207,41 @@ current constraints:
     )
 
     # taxes by using el for heat (in €/MWh)
-    El_Heat_Tax = 60        # assumed tax in €/MWh for using el to generate heat
     @constraint(model, 
-        tax_cost ==
-        # taxes for EB
+        tax_cost ≥
+        # taxes for EB and HP
         sum( 
             sum( 
-                El_Heat_Tax * active_generation[t, i, "EB"] / Gentech_data["EB"].Efficiency +                                             
+                options.El_Heat_Tax * active_generation[t, i, "EB"] / Gentech_data["EB"].Efficiency +                                             
                 # taxes for HP 
-                sum(El_Heat_Tax * active_generation[t, i, x] / Gentech_data[x].Alpha for x ∈ HP) 
+                sum(options.El_Heat_Tax * active_generation[t, i, x] / Gentech_data[x].Alpha for x ∈ HP) 
             for i ∈ NODES)
         for t ∈ PERIODS)
     )
 
     # System Cost
     # represented in k€ for the total cost
-    @constraint(model, SystemCost,
-        total_cost * 1e3 == capex * 1e3 +       # in k€
-                            fix_om * 1e3 +      # in k€
-                            fuel_cost +         # in €
-                            var_om +            # in €
-                            start_part_costs +  # in €
-                            exp_imp_costs +     # in €
-                            tax_cost            # in €
-    )
+    if options.FlexLim == :yes
+        @constraint(model, SystemCost,
+            total_cost * 1e3 ≥ capex * 1e3 +       # in k€
+                                fix_om * 1e3 +      # in k€
+                                fuel_cost +         # in €
+                                var_om +            # in €
+                                start_part_costs +  # in €
+                                exp_imp_costs +     # in €
+                                tax_cost            # in €
+        )
+
+    else
+        @constraint(model, SystemCost,
+            total_cost * 1e3 ≥ capex * 1e3 +       # in k€
+                                fix_om * 1e3 +      # in k€
+                                fuel_cost +         # in €
+                                var_om +            # in €
+                                exp_imp_costs +     # in €
+                                tax_cost            # in €
+        )
+    end
 
     #=------------------------------------------------------------------------------
     CO2 LIMITS
@@ -442,17 +253,28 @@ current constraints:
     println("CO2 constraints")
     println("---------------------------------------------")
 
-    @constraint(model,
-        sum( 
+    if options.FlexLim == :yes
+        @constraint(model,
             sum( 
-                sum(active_generation[t, i, x] * Gentech_data[x].Emission / Gentech_data[x].Efficiency for x ∈ GEN_TECHS) +
-                sum(gen_startup_CO2[t, i, x] + gen_partload_CO2[t, i, x] for x ∈ FLEX_TH)
-            for i ∈ NODES)
-        for t ∈ PERIODS) ≤
-        options.CO2_limit                                                                                      
-    )
+                sum( 
+                    sum(active_generation[t, i, x] * Gentech_data[x].Emission / Gentech_data[x].Efficiency for x ∈ GEN_TECHS) +
+                    sum(gen_startup_CO2[t, i, x] + gen_partload_CO2[t, i, x] for x ∈ FLEX_TH)
+                for i ∈ NODES)
+            for t ∈ PERIODS) ≤
+            options.CO2_limit                                                                                      
+        )
+    else
+        @constraint(model,
+            sum( 
+                sum( 
+                    sum(active_generation[t, i, x] * Gentech_data[x].Emission / Gentech_data[x].Efficiency for x ∈ GEN_TECHS)
+                for i ∈ NODES)
+            for t ∈ PERIODS) ≤
+            options.CO2_limit                                                                                      
+        )
+    end
 
-end     # end cost_Constraints
+end     # end cost_constraints
 
 
 function gen_constraints(
@@ -480,120 +302,32 @@ current constraints:
     ## Sets and parameters
 
     @unpack NODES, 
-            TRANSMISSION_NODES,
-            SE3_TRANS_NODES,
-            NO1_TRANS_NODES,
-            DK1_TRANS_NODES,
             COAST_NODES,
             GBG,
-            GEN_TECHS, 
+            GEN_TECHS,
             EL_GEN, 
-            HEAT_GEN, 
-            H2_GEN, 
-            STO_TECHS, 
-            EL_STO, 
-            HEAT_STO, 
-            H2_STO, 
             PERIODS, 
-            LINES, 
-            NODE_FROM, 
-            NODE_TO, 
             CHP,
-            FC,
             WIND,
             PV,
-            HP,
-            BOILER,
-            EC,
-            FLEX_TH,
-            THERMAL_1H,
-            THERMAL_2H,
-            # THERMAL_8H,
-            THERMAL_12H = sets
+            FLEX_TH = sets
     
-    @unpack SE3_price,
-            NO1_price,
-            DK1_price, 
-            Gentech_data, 
+    @unpack Gentech_data, 
             Stotech_data, 
-            Eldemand_data,
-            Reactive_Demand, 
-            Heatdemand_data, 
-            H2demand_data, 
-            # Discount_rate,
             Gen_cos_ϕ, 
-            Gen_sin_ϕ, 
-            Demand_cos_ϕ, 
-            Demand_sin_ϕ, 
-            Lines_props = params
-            # Vnom = params
+            Gen_sin_ϕ = params
 
     ## Variables
 
-    @unpack total_cost,
-            capex,
-            fix_om,
-            fuel_cost,
-            var_om,
-            start_part_costs,
-            exp_imp_costs,
-            tax_cost,
-            existing_generation,
+    @unpack existing_generation,
             generation_investment,
             storage_investment,
             active_generation,
-            reactive_generation,
-            generation_spin,
-            generation_on,
-            gen_startup_cost,
-            gen_partload_cost,
-            gen_startup_CO2,
-            gen_partload_CO2,
-            storage_charge,
-            storage_discharge,
-            storage_level,
-            nodal_voltage,
-            nodal_angle,
-            import_export,
-            export_to,
-            import_from,
-            active_flow,
-            reactive_flow = vars
+            reactive_generation = vars
 
     #=------------------------------------------------------------------------------
     MODEL CONSTRAINTS
     ------------------------------------------------------------------------------=#
-    println("---------------------------------------------")
-    println("Gen limits constraints")
-    println("---------------------------------------------")
-
-    #=------------------------------------------------------------------------------
-    GENERATION LIMITS
-    EQ (9) - (11)
-    ------------------------------------------------------------------------------=#
-    # general active and reactive generation limited by respective capacities
-    # reactive generation is limited by the power factor relationship between active - reactive
-    # reactive generation is assumed only applies for electricity generation technologies
-    # Wind, PV, FLEX_TH are excluded because they are defined differently
-    @constraints model begin
-        # # active power generation
-        # # commented because generation can opt not to generate
-        # # perhaps any must run unit?
-        # Active_Generation_Limit_lo[i ∈ NODES, x ∈ GEN_TECHS, t ∈ PERIODS; x != [WIND, PV, FLEX_TH]],
-        #     existing_generation[i, x] ≤ active_generation[t, i, x]
-
-        Active_Generation_Limit_up[t ∈ PERIODS, i ∈ NODES, x ∈ GEN_TECHS; x != [WIND, PV, FLEX_TH]],
-            active_generation[t, i, x] ≤ existing_generation[i, x] + generation_investment[i, x]    
-            
-        # lower bound of reactive generation
-        Reactive_Generation_Limit_lo[t ∈ PERIODS, i ∈ NODES, x ∈ EL_GEN],
-            active_generation[t, i, x] * Gen_sin_ϕ[2] / Gen_cos_ϕ[2] ≤ reactive_generation[t, i, x]
-
-        # upper bound of reactive generation
-        Reactive_Generation_Limit_up[t ∈ PERIODS, i ∈ NODES, x ∈ EL_GEN],
-            reactive_generation[t, i, x] ≤ active_generation[t, i, x] * Gen_sin_ϕ[1] / Gen_cos_ϕ[1]
-    end
-
     # upper and lower bounds for generation capacity 
     # detailes are defined in set_gen_bounds function
     # include limits due to:
@@ -668,34 +402,26 @@ current constraints:
     # does not make sense to buy sea water and transport it
     
     for t ∈ PERIODS
-        for node ∈ NODES
-            if node ∉ COAST_NODES
-                # @constraint(model, 
-                # generation_investment[node, "WOFF"] == 0
-                # )
-                
-                fix(
-                generation_investment[node, "WOFF"], 
-                0.0, 
-                force=true
-                )
-                
-                fix(generation_investment[node, "HPSW"], 
-                0.0, 
-                force=true
-                )
-                
-                # @constraint(model, 
-                # active_generation[node, "WOFF", t] == 0
-                # )
-                fix(
-                active_generation[t, node, "WOFF"], 
-                0.0, 
-                force=true
-                )
-                
-            end
+        for node ∈ COAST_NODES
+            fix(
+            active_generation[t, node, "WOFF"], 
+            0.0, 
+            force=true
+            )
         end
+    end
+
+    for node ∈ COAST_NODES
+        fix(
+        generation_investment[node, "WOFF"], 
+        0.0, 
+        force=true
+        )
+        
+        fix(generation_investment[node, "HPSW"], 
+        0.0, 
+        force=true
+        )
     end
 
     # techs that most probably not invested in future
@@ -754,6 +480,98 @@ current constraints:
             active_generation[t, i, "PVTRACK"] ≤ profiles.PVopt[t, i] * ( existing_generation[i, "PVTRACK"] + generation_investment[i, "PVTRACK"] )
     end
 
+    println("---------------------------------------------")
+    println("Gen limits constraints")
+    println("---------------------------------------------")
+
+    #=------------------------------------------------------------------------------
+    GENERATION LIMITS
+    EQ (9) - (11)
+    ------------------------------------------------------------------------------=#
+    # general active and reactive generation limited by respective capacities
+    # reactive generation is limited by the power factor relationship between active - reactive
+    # reactive generation is assumed only applies for electricity generation technologies
+    # Wind, PV, FLEX_TH are excluded because they are defined differently
+    
+    if options.FlexLim == :yes
+        @constraint(model, Active_Generation_Limit_up[t ∈ PERIODS, i ∈ NODES, x ∈ GEN_TECHS; x != [WIND, PV, FLEX_TH]],
+            active_generation[t, i, x] ≤ existing_generation[i, x] + generation_investment[i, x])
+    else
+        @constraint(model, Active_Generation_Limit_up[t ∈ PERIODS, i ∈ NODES, x ∈ GEN_TECHS; x != [WIND, PV]],
+        active_generation[t, i, x] ≤ existing_generation[i, x] + generation_investment[i, x])
+    end  
+    
+    @constraints model begin
+        # # active power generation
+        # # commented because generation can opt not to generate
+        # # perhaps any must run unit?
+        # Active_Generation_Limit_lo[i ∈ NODES, x ∈ GEN_TECHS, t ∈ PERIODS; x != [WIND, PV, FLEX_TH]],
+        #     existing_generation[i, x] ≤ active_generation[t, i, x]
+        
+        # lower bound of reactive generation
+        Reactive_Generation_Limit_lo[t ∈ PERIODS, i ∈ NODES, x ∈ EL_GEN],
+            active_generation[t, i, x] * Gen_sin_ϕ[2] / Gen_cos_ϕ[2] ≤ reactive_generation[t, i, x]
+
+        # upper bound of reactive generation
+        Reactive_Generation_Limit_up[t ∈ PERIODS, i ∈ NODES, x ∈ EL_GEN],
+            reactive_generation[t, i, x] ≤ active_generation[t, i, x] * Gen_sin_ϕ[1] / Gen_cos_ϕ[1]
+    end
+
+
+end     # end gen_Constraints
+
+
+function flex_lim(
+    model::Model,
+    sets::ModelSets,
+    params::ModelParameters,
+    vars::ModelVariables,
+    grid_infra::GridInfrastructures,
+    profiles::Profiles
+)
+
+#=------------------------------------------------------------------------------
+----------------------------- CONSTRAINTS --------------------------------------
+
+Define Constraints of the model
+current constraints:
+1. Objective
+2. power balance
+3. storage balance
+4. power flow
+5. limits
+6. ...
+
+------------------------------------------------------------------------------=#
+    ## Sets and parameters
+
+    @unpack NODES, 
+            GEN_TECHS,
+            PERIODS, 
+            FLEX_TH,
+            THERMAL_1H,
+            THERMAL_2H,
+            # THERMAL_8H,
+            THERMAL_12H = sets
+    
+    @unpack Gentech_data = params
+
+    ## Variables
+
+    @unpack existing_generation,
+            generation_investment,
+            storage_investment,
+            active_generation,
+            generation_spin,
+            generation_on,
+            gen_startup_cost,
+            gen_partload_cost,
+            gen_startup_CO2,
+            gen_partload_CO2 = vars
+
+    #=------------------------------------------------------------------------------
+    MODEL CONSTRAINTS
+    ------------------------------------------------------------------------------=#
     # constraints related to two-variable approach
     # detailes are defined in flex_lim function
 
@@ -780,7 +598,7 @@ current constraints:
     )
 
     # start-up limits
-    @constraint(model, [t ∈ PERIODS, i ∈ NODES, x ∈ FLEX_TH; t ≥ 2],
+    @constraint(model, Hourly_increment[t ∈ PERIODS, i ∈ NODES, x ∈ FLEX_TH; t ≥ 2],
         generation_on[t, i, x] ≥ 
         generation_spin[t, i, x] - generation_spin[t-1, i, x]
     )
@@ -832,7 +650,7 @@ current constraints:
         )
     end
 
-end     # end gen_Constraints
+end     # end flex_lim
 
 
 function sto_constraints(
@@ -860,85 +678,21 @@ current constraints:
     ## Sets and parameters
 
     @unpack NODES, 
-            TRANSMISSION_NODES,
-            SE3_TRANS_NODES,
-            NO1_TRANS_NODES,
-            DK1_TRANS_NODES,
-            COAST_NODES,
-            GBG,
-            GEN_TECHS, 
-            EL_GEN, 
-            HEAT_GEN, 
-            H2_GEN, 
             STO_TECHS, 
             EL_STO, 
             HEAT_STO, 
             H2_STO, 
-            PERIODS, 
-            LINES, 
-            NODE_FROM, 
-            NODE_TO, 
-            CHP,
-            FC,
-            WIND,
-            PV,
-            HP,
-            BOILER,
-            EC,
-            FLEX_TH,
-            THERMAL_1H,
-            THERMAL_2H,
-            # THERMAL_8H,
-            THERMAL_12H = sets
+            PERIODS = sets
     
-    @unpack SE3_price,
-            NO1_price,
-            DK1_price, 
-            Gentech_data, 
-            Stotech_data, 
-            Eldemand_data,
-            Reactive_Demand, 
-            Heatdemand_data, 
-            H2demand_data, 
-            # Discount_rate,
-            Gen_cos_ϕ, 
-            Gen_sin_ϕ, 
-            Demand_cos_ϕ, 
-            Demand_sin_ϕ, 
-            Lines_props = params
+    @unpack Stotech_data = params
             # Vnom = params
 
     ## Variables
 
-    @unpack total_cost,
-            capex,
-            fix_om,
-            fuel_cost,
-            var_om,
-            start_part_costs,
-            exp_imp_costs,
-            tax_cost,
-            existing_generation,
-            generation_investment,
-            storage_investment,
-            active_generation,
-            reactive_generation,
-            generation_spin,
-            generation_on,
-            gen_startup_cost,
-            gen_partload_cost,
-            gen_startup_CO2,
-            gen_partload_CO2,
+    @unpack storage_investment,
             storage_charge,
             storage_discharge,
-            storage_level,
-            nodal_voltage,
-            nodal_angle,
-            import_export,
-            export_to,
-            import_from,
-            active_flow,
-            reactive_flow = vars
+            storage_level = vars
 
     #=------------------------------------------------------------------------------
     MODEL CONSTRAINTS
@@ -981,10 +735,10 @@ current constraints:
             storage_discharge[t, i, s] ≤ storage_investment[i, s] / Stotech_data[s].WithdrawalRate    
         
         # Line Rock cavern cycle limits
-        Line_caverns_limit_1[t ∈ PERIODS, i ∈ NODES],
+        Line_caverns_limit_1[i ∈ NODES],
             sum( storage_charge[t, i, "LRC"] * Stotech_data["LRC"].Ch_eff for t ∈ PERIODS) ≤ storage_investment[i, "LRC"] * 20
 
-        Line_caverns_limit_2[t ∈ PERIODS, i ∈ NODES],
+        Line_caverns_limit_2[i ∈ NODES],
             sum( storage_discharge[t, i, "LRC"] / Stotech_data["LRC"].Dch_eff for t ∈ PERIODS) ≤ storage_investment[i, "LRC"] * 20    
 
         #TODO: losses in the storage? thermal, battery capacity, etc.?
@@ -1019,11 +773,6 @@ current constraints:
 
     @unpack NODES, 
             TRANSMISSION_NODES,
-            SE3_TRANS_NODES,
-            NO1_TRANS_NODES,
-            DK1_TRANS_NODES,
-            COAST_NODES,
-            GBG,
             GEN_TECHS, 
             EL_GEN, 
             HEAT_GEN, 
@@ -1042,56 +791,22 @@ current constraints:
             PV,
             HP,
             BOILER,
-            EC,
-            FLEX_TH,
-            THERMAL_1H,
-            THERMAL_2H,
-            # THERMAL_8H,
-            THERMAL_12H = sets
+            EC = sets
     
-    @unpack SE3_price,
-            NO1_price,
-            DK1_price, 
-            Gentech_data, 
+    @unpack Gentech_data, 
             Stotech_data, 
             Eldemand_data,
             Reactive_Demand, 
             Heatdemand_data, 
-            H2demand_data, 
-            # Discount_rate,
-            Gen_cos_ϕ, 
-            Gen_sin_ϕ, 
-            Demand_cos_ϕ, 
-            Demand_sin_ϕ, 
-            Lines_props = params
-            # Vnom = params
+            H2demand_data = params
 
     ## Variables
 
-    @unpack total_cost,
-            capex,
-            fix_om,
-            fuel_cost,
-            var_om,
-            start_part_costs,
-            exp_imp_costs,
-            tax_cost,
-            existing_generation,
-            generation_investment,
-            storage_investment,
-            active_generation,
+    @unpack active_generation,
             reactive_generation,
-            generation_spin,
-            generation_on,
-            gen_startup_cost,
-            gen_partload_cost,
-            gen_startup_CO2,
-            gen_partload_CO2,
             storage_charge,
             storage_discharge,
             storage_level,
-            nodal_voltage,
-            nodal_angle,
             import_export,
             export_to,
             import_from,
@@ -1112,10 +827,6 @@ current constraints:
     # Electricity nodal balance
     for t ∈ PERIODS
         for node ∈ NODES
-
-            println("---------------------------------------------")
-            println("El nodal balance constraint node $(node) hour $(t)")
-            println("---------------------------------------------")
 
             # define electricity flow  from lines coming in/out of nodes
             # enter considered as generation/supply, vice versa
@@ -1224,83 +935,18 @@ current constraints:
     ## Sets and parameters
 
     @unpack NODES, 
-            TRANSMISSION_NODES,
-            SE3_TRANS_NODES,
-            NO1_TRANS_NODES,
-            DK1_TRANS_NODES,
-            COAST_NODES,
-            GBG,
-            GEN_TECHS, 
-            EL_GEN, 
-            HEAT_GEN, 
-            H2_GEN, 
-            STO_TECHS, 
-            EL_STO, 
-            HEAT_STO, 
-            H2_STO, 
             PERIODS, 
             LINES, 
             NODE_FROM, 
-            NODE_TO, 
-            CHP,
-            FC,
-            WIND,
-            PV,
-            HP,
-            BOILER,
-            EC,
-            FLEX_TH,
-            THERMAL_1H,
-            THERMAL_2H,
-            # THERMAL_8H,
-            THERMAL_12H = sets
+            NODE_TO = sets
     
-    @unpack SE3_price,
-            NO1_price,
-            DK1_price, 
-            Gentech_data, 
-            Stotech_data, 
-            Eldemand_data,
-            Reactive_Demand, 
-            Heatdemand_data, 
-            H2demand_data, 
-            # Discount_rate,
-            Gen_cos_ϕ, 
-            Gen_sin_ϕ, 
-            Demand_cos_ϕ, 
-            Demand_sin_ϕ, 
-            Lines_props = params
+    @unpack Lines_props = params
             # Vnom = params
 
     ## Variables
 
-    @unpack total_cost,
-            capex,
-            fix_om,
-            fuel_cost,
-            var_om,
-            start_part_costs,
-            exp_imp_costs,
-            tax_cost,
-            existing_generation,
-            generation_investment,
-            storage_investment,
-            active_generation,
-            reactive_generation,
-            generation_spin,
-            generation_on,
-            gen_startup_cost,
-            gen_partload_cost,
-            gen_startup_CO2,
-            gen_partload_CO2,
-            storage_charge,
-            storage_discharge,
-            storage_level,
-            nodal_voltage,
+    @unpack nodal_voltage,
             nodal_angle,
-            import_export,
-            export_to,
-            import_from,
             active_flow,
             reactive_flow = vars
 

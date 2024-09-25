@@ -1,26 +1,150 @@
-function run_Model(
+function run_model(
     # model::Model,
     # price::NamedTuple,
     # grid_infra::NamedTuple,
     # tech_props::NamedTuple,
     # demand::NamedTuple,
     # profiles::NamedTuple,
-    # options=ModelOptions()
+    # options=ModelOptions(),
+    solver::Symbol = :gurobi,
 )
 #=------------------------------------------------------------------------------
 -------------------------------- MODEL -----------------------------------------
 
-Define core Model
+Define the problem Model
 Taking the following:
 1. Sets
 2. Params
 3. Vars
 4. Constraints
-5. Query results
 
 Return:
-1. Model
-2. Results in NamedTuple
+1. Model in .mps file
+
+------------------------------------------------------------------------------=#
+
+    model = Model()
+
+    #=---------------------------------------------
+    INPUT DATA
+    ---------------------------------------------=#
+    println("---------------------------------------------")
+    println("Read input data")
+    println("---------------------------------------------")
+
+    price, grid_infra, tech_props, demand, profiles = read_input_data()
+
+    start_sets = time()
+
+    @time sets, params = make_sets(price, grid_infra, tech_props, demand)
+
+    time_sets = time()-start_sets  
+
+    println("---------------------------------------------")
+    println("Time needed to read input = $(time_sets / 60) mins")
+    println("---------------------------------------------")
+
+    #------------------------------------------------------------------------------=#
+    println("---------------------------------------------")
+    println("Define Variables")
+    println("---------------------------------------------")
+    start_vars = time()
+
+    @time vars = make_variables(model, sets, params)
+
+    time_vars = time()-start_vars  
+    println("---------------------------------------------")
+    println("Time needed to define variables = $(time_vars / 60) mins")
+    println("---------------------------------------------")
+
+    #------------------------------------------------------------------------------=#
+    println("---------------------------------------------")
+    println("Define Constraints")
+    println("---------------------------------------------")
+    start_const = time()
+
+    @time gen_constraints(model, sets, params, vars, grid_infra, profiles)
+    if options.FlexLim == :yes
+        @time flex_lim(model, sets, params, vars, grid_infra, profiles)
+    end
+    @time sto_constraints(model, sets, params, vars, grid_infra, profiles)
+    @time enbal_constraints(model, sets, params, vars, grid_infra, profiles)
+    @time power_flow_constraints(model, sets, params, vars, grid_infra, profiles)
+    @time cost_constraints(model, sets, params, vars, grid_infra, profiles)
+
+    time_consts = time()-start_const  
+    println("---------------------------------------------")
+    println("Time needed to define constraints = $(time_consts / 60) mins")
+    println("---------------------------------------------")
+
+    #------------------------------------------------------------------------------=#    
+
+    println("---------------------------------------------")
+    println("Start Solving")
+    println("---------------------------------------------")
+    start_solve = time()
+
+    set_solver(model, solver)
+
+    # optimize!(model)
+
+    # if model == Model(Gurobi.Optimizer)
+    #     compute_conflict!(model)
+
+    #     if get_attribute(model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
+    #         iis_model, _ = copy_conflict(model)
+    #         print(iis_model)
+    #     end
+    # end
+    
+    time_solve = time()-start_solve  
+    println("---------------------------------------------")
+    println("Time needed to solve = $(time_solve / 60) mins")
+    println("---------------------------------------------")
+    
+    #=------------------------------------------------------------------------------
+    RETURN
+    ------------------------------------------------------------------------------=#  
+
+    times = (;
+            time_sets,
+            time_vars,
+            time_consts,
+            time_solve
+    )
+
+    model_struct = ModelStruct(model, sets, params, vars, times)
+    
+    return model_struct
+
+end
+
+
+function build_model(
+    # model::Model,
+    # price::NamedTuple,
+    # grid_infra::NamedTuple,
+    # tech_props::NamedTuple,
+    # demand::NamedTuple,
+    # profiles::NamedTuple,
+    # options=ModelOptions(),
+    # solver=:gurobi,
+    filename::String,
+)
+#=------------------------------------------------------------------------------
+-------------------------------- MODEL -----------------------------------------
+
+EXPERIMENTING
+
+Define the problem Model
+Taking the following:
+1. Sets
+2. Params
+3. Vars
+4. Constraints
+
+Return:
+1. Model in .mps file
 
 ------------------------------------------------------------------------------=#
 
@@ -66,7 +190,7 @@ Return:
 
     @time cost_constraints(model, sets, params, vars, grid_infra, profiles)
     @time gen_constraints(model, sets, params, vars, grid_infra, profiles)
-    @time sto_constraints(model, sets, params, vars)
+    @time sto_constraints(model, sets, params, vars, grid_infra, profiles)
     @time enbal_constraints(model, sets, params, vars, grid_infra, profiles)
     @time power_flow_constraints(model, sets, params, vars, grid_infra, profiles)
 
@@ -76,15 +200,58 @@ Return:
     println("---------------------------------------------")
 
     #------------------------------------------------------------------------------=#    
+    write_to_file(model, filename * ".mps")
+    
+    #=------------------------------------------------------------------------------
+    RETURN
+    ------------------------------------------------------------------------------=#  
+
+    # times = (;
+    #         time_sets,
+    #         time_vars,
+    #         time_consts,
+    #         time_solve
+    # )
+
+    # model_struct = ModelStruct(model, sets, params, vars, times)
+    
+    return model
+
+end
+
+
+function solve_model(
+    modelname::String,
+    solver::Symbol=:gurobi
+)
+#=------------------------------------------------------------------------------
+-------------------------------- MODEL -----------------------------------------
+
+EXPERIMENTING
+
+Solve the problem Model
+Taking the following:
+1. Model
+
+Return:
+1. Model in .mps file
+
+------------------------------------------------------------------------------=#
+
+    model_file = joinpath(current_dir, modelname * ".mps")
+
+    m = read_from_file(model_file)
+
+    set_solver(m, solver)
 
     println("---------------------------------------------")
     println("Start Solving")
     println("---------------------------------------------")
     start_solve = time()
 
-    set_solver(model)
+    optimize!(m)
 
-    optimize!(model)
+    
 
     # if model == Model(Gurobi.Optimizer)
     #     compute_conflict!(model)
@@ -94,26 +261,14 @@ Return:
     #         print(iis_model)
     #     end
     # end
-    
+
     time_solve = time()-start_solve  
     println("---------------------------------------------")
     println("Time needed to solve = $(time_solve / 60) mins")
     println("---------------------------------------------")
-    
-    #=------------------------------------------------------------------------------
-    RETURN
-    ------------------------------------------------------------------------------=#  
 
-    times = (;
-            time_sets,
-            time_vars,
-            time_consts,
-            time_solve
-    )
 
-    model_struct = ModelStruct(model, sets, params, vars, times)
-    
-    return model_struct
+    return m
 
 end
 
@@ -166,32 +321,44 @@ function read_input_data(
 end
 
 
-function set_solver(model, solver=:gurobi)
+function set_solver(model, solver::Symbol = :gurobi)
 
     if solver == :gurobi
         # Workaround for bug:
         # https://discourse.julialang.org/t/how-can-i-clear-solver-attributes-in-jump/57953
         optimizer = optimizer_with_attributes(
                 Gurobi.Optimizer,
-                # "Threads" => Threads.nthreads(),  # shutoff for now, memory limit?
+                "Threads" => 8,                     # shutoff for now, memory limit?
                 "BarHomogeneous" => 1,              # 1: enabled
                 "Crossover" => 0,                  # 0: disabled
                 # "CrossoverBasis" => 0,                  # 0: disabled
                 # "BarConvTol" => 1e-6,                  # 0: disabled
-                "Method" => 2,                     # -1: auto, 1: dual simplex
+                "Method" => 2,                     # -1: auto, 1: dual simplex, 2: barrier
                 "Presolve" => 2,                    # 2: aggressive
                 "PreSparsify" => 2,                    # 2: aggressive
-                # "NumericFocus" => 2,
+                "NumericFocus" => 2,
+                "NodefileStart" => 0.5,
+                "Aggregate" => 1,
+                "MemLimit" => 250,
+                "ScaleFlag" => 1,
+                "DisplayInterval" => 300,
         )
         
         set_optimizer(model, optimizer)
  
         # set_silent(model)
-        # log_file = joinpath(results_dir, "barrier_no_crossover_log.txt")
+        # log_file = joinpath(results_dir, "1year_log.txt")
         # set_optimizer_attribute(model, "LogFile", log_file)
 
     elseif solver == :highs
-        optimizer = optimizer_with_attributes(HiGHS.Optimizer)
+        optimizer = optimizer_with_attributes(
+            HiGHS.Optimizer,
+            # "threads" => 0,
+            "presolve" => "on",
+            "solver" => "ipm",          # simplex, ipm=barrier, pdlp
+            "run_crossover" => "off",
+        )
+        
         set_optimizer(model, optimizer)
 
     else
@@ -317,27 +484,27 @@ Considerations for data structure:
 
         for node ∈ NODES
             Generation_Dispatch[node] = DataFrame(
-                [value(active_generation[node, tech, t]) for t ∈ PERIODS, tech ∈ GEN_TECHS], 
+                [value(active_generation[t, node, tech]) for t ∈ PERIODS, tech ∈ GEN_TECHS], 
                 GEN_TECHS
             )
 
             Reactive_Dispatch[node] = DataFrame(
-                [value(reactive_generation[node, tech, t]) for t ∈ PERIODS, tech ∈ EL_GEN], 
+                [value(reactive_generation[t, node, tech]) for t ∈ PERIODS, tech ∈ EL_GEN], 
                 EL_GEN
             )
 
             Storage_Charge[node] = DataFrame(
-                [value(storage_charge[node, tech, t]) for t ∈ PERIODS, tech ∈ STO_TECHS], 
+                [value(storage_charge[t, node, tech]) for t ∈ PERIODS, tech ∈ STO_TECHS], 
                 STO_TECHS
             )
 
             Storage_Discharge[node] = DataFrame(
-                [value(storage_discharge[node, tech, t]) for t ∈ PERIODS, tech ∈ STO_TECHS], 
+                [value(storage_discharge[t, node, tech]) for t ∈ PERIODS, tech ∈ STO_TECHS], 
                 STO_TECHS
             )
 
             Storage_Level[node] = DataFrame(
-                [value(storage_discharge[node, tech, t]) for t ∈ PERIODS, tech ∈ STO_TECHS], 
+                [value(storage_discharge[t, node, tech]) for t ∈ PERIODS, tech ∈ STO_TECHS], 
                 STO_TECHS
             )
         end
@@ -362,9 +529,9 @@ Considerations for data structure:
         Export_Import = DataFrame()
 
         for node ∈ TRANSMISSION_NODES
-            Export_to[!, Symbol(node)] = [value(export_to[node, t]) for t ∈ PERIODS]
-            Import_from[!, Symbol(node)] = [value(import_from[node, t]) for t ∈ PERIODS]
-            Export_Import[!, Symbol(node)] = [value(import_export[node, t]) for t ∈ PERIODS]
+            Export_to[!, Symbol(node)] = [value(export_to[t, node]) for t ∈ PERIODS]
+            Import_from[!, Symbol(node)] = [value(import_from[t, node]) for t ∈ PERIODS]
+            Export_Import[!, Symbol(node)] = [value(import_export[t, node]) for t ∈ PERIODS]
         end
 
         # Voltage
@@ -372,8 +539,8 @@ Considerations for data structure:
         Nodal_Angle = DataFrame()
 
         for node ∈ NODES
-            Nodal_Voltage[!, Symbol(node)] = [value(nodal_voltage[node, t]) for t ∈ PERIODS]
-            Nodal_Angle[!, Symbol(node)] = [value(nodal_angle[node, t]) for t ∈ PERIODS]
+            Nodal_Voltage[!, Symbol(node)] = [value(nodal_voltage[t, node]) for t ∈ PERIODS]
+            Nodal_Angle[!, Symbol(node)] = [value(nodal_angle[t, node]) for t ∈ PERIODS]
         end
 
         # Power Flow
@@ -381,8 +548,8 @@ Considerations for data structure:
         Reactive_Flow = DataFrame()
 
         for line ∈ LINES
-            Active_Flow[!, Symbol(line)] = [value(active_flow[line, t]) for t ∈ PERIODS]
-            Reactive_Flow[!, Symbol(line)] = [value(reactive_flow[line, t]) for t ∈ PERIODS]
+            Active_Flow[!, Symbol(line)] = [value(active_flow[t, line]) for t ∈ PERIODS]
+            Reactive_Flow[!, Symbol(line)] = [value(reactive_flow[t, line]) for t ∈ PERIODS]
         end
 
         results =   (; 

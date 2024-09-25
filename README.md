@@ -23,6 +23,6 @@ The model takes input data from ```\modelinput```, which currently still is dumm
 As the script name suggests, each script contains the following:
 
 + main script to run the model ([main.jl](src/main.jl))
-+ read input data and define Sets and Paramaters of the model ([params_sets.jl](src/params_sets.jl))
-+ define Variables and Constraints of the model ([vars_consts.jl](src/vars_consts.jl))
++ read input data and define Sets, Paramaters, and Variables of the model ([params_vars.jl](src/params_vars.jl))
++ define Constraints of the model ([constraints.jl](src/constraints.jl))
 + functions for other uses ([utilities.jl](src/utilities.jl))

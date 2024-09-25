@@ -13,8 +13,22 @@ Base.@kwdef mutable struct ModelOptions
     profile_year    ::Int = 2019        # model profile
     power_flow      ::Symbol = :lac     # linearised AC (LAC) or DC
     Discount_rate   ::Float64 = 0.05    # assumed discount rate
+    El_Heat_Tax     ::Float64 = 60.0
     Vnom            ::Float64 = 130.0   # system voltage level
+    FlexLim         ::Symbol = :yes
+    EV              ::Symbol = :yes
+    ### others coming up
+end
 
+
+Base.@kwdef mutable struct EVOptions
+    BatCap          ::Float64 = 60      # assumed battery capacity, default 60 kWh (15, 30, 60, 85)
+    CP              ::Float64 = 6.9     # assumed charger power, default 6.9 kW (3.7, 6.9, 11.0, 22.0)
+    Charging_infra  ::Symbol = :h1      # assumed passenger car charging infrastructure (home, h1, h3, h6, ers)
+    V2G             ::Symbol = :no      # charging capability :yes or :no
+    Direct          ::Symbol = :no      # charging capability :yes or :no
+    Optimal         ::Symbol = :no      # charging capability :yes or :no
+    Qty             ::Symbol = :high    # scenario of number of EVs :high or :low
     ### others coming up
 end
 
@@ -74,36 +88,40 @@ struct ModelParameters # Parameters
 end
 
 
-struct ModelVariables # Variables
-    total_cost          
-    capex               
-    fix_om              
-    fuel_cost           
-    var_om              
-    start_part_costs    
-    exp_imp_costs       
-    tax_cost            
-    existing_generation
-    generation_investment 
-    storage_investment 
-    active_generation 
-    reactive_generation 
-    generation_spin
-    generation_on
-    gen_startup_cost
-    gen_partload_cost
-    gen_startup_CO2
-    gen_partload_CO2            
-    storage_charge 
-    storage_discharge 
-    storage_level 
-    nodal_voltage 
-    nodal_angle
-    import_export 
-    export_to 
-    import_from 
-    active_flow
-    reactive_flow
+mutable struct ModelVariables # Variables
+    total_cost              ::VariableRef
+    capex                   ::VariableRef
+    fix_om                  ::VariableRef
+    fuel_cost               ::VariableRef
+    var_om                  ::VariableRef
+    start_part_costs        ::VariableRef
+    exp_imp_costs           ::VariableRef
+    tax_cost                ::VariableRef
+    existing_generation     ::JuMP.Containers.DenseAxisArray
+    generation_investment   ::JuMP.Containers.DenseAxisArray
+    storage_investment      ::JuMP.Containers.DenseAxisArray
+    active_generation       ::JuMP.Containers.DenseAxisArray
+    reactive_generation     ::JuMP.Containers.DenseAxisArray
+    generation_spin         ::Union{JuMP.Containers.DenseAxisArray, Nothing}
+    generation_on           ::Union{JuMP.Containers.DenseAxisArray, Nothing}
+    gen_startup_cost        ::Union{JuMP.Containers.DenseAxisArray, Nothing}
+    gen_partload_cost       ::Union{JuMP.Containers.DenseAxisArray, Nothing}
+    gen_startup_CO2         ::Union{JuMP.Containers.DenseAxisArray, Nothing}
+    gen_partload_CO2        ::Union{JuMP.Containers.DenseAxisArray, Nothing}
+    storage_charge          ::JuMP.Containers.DenseAxisArray
+    storage_discharge       ::JuMP.Containers.DenseAxisArray
+    storage_level           ::JuMP.Containers.DenseAxisArray
+    nodal_voltage           ::JuMP.Containers.DenseAxisArray
+    nodal_angle             ::JuMP.Containers.DenseAxisArray
+    import_export           ::JuMP.Containers.DenseAxisArray
+    export_to               ::JuMP.Containers.DenseAxisArray
+    import_from             ::JuMP.Containers.DenseAxisArray
+    active_flow             ::JuMP.Containers.DenseAxisArray
+    reactive_flow           ::JuMP.Containers.DenseAxisArray
+    pev_charging_slow       ::Union{JuMP.Containers.DenseAxisArray, Nothing}
+    pev_discharge_net       ::Union{JuMP.Containers.DenseAxisArray, Nothing}
+    pev_storage             ::Union{JuMP.Containers.DenseAxisArray, Nothing}
+    pev_need                ::Union{JuMP.Containers.DenseAxisArray, Nothing}
 end
 
 

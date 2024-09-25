@@ -13,15 +13,15 @@ Return:
 ------------------------------------------------------------------------------=#
 
 using DataFrames, CSV, XLSX, UnPack, Printf
-using JuMP, HiGHS, Ipopt, GLPK, Gurobi
+using JuMP, HiGHS, Ipopt, Gurobi
 import AxisArrays, SparseArrays, LinearAlgebra
 import Plots, CairoMakie
 CairoMakie.activate!()
 
 include("structs.jl")
 include("utilities.jl")
-include("params_sets.jl")
-include("vars_consts.jl")
+include("params_vars.jl")
+include("constraints.jl")
 include("model.jl")
 
 # Set directory
@@ -31,11 +31,15 @@ mkpath("modelinput")                                            # input folder, 
 mkpath("results")                                               # results folder
 const input_dir::String = joinpath(current_dir, "modelinput")
 const results_dir::String = joinpath(current_dir, "results")
-const options::ModelOptions = ModelOptions(run=:trial)          # decided as global for now so that can be called in functions
+const options::ModelOptions = ModelOptions(run=:trial, FlexLim=:yes, EV=:yes)          # decided as global for now so that can be called in functions
+if options.EV == :yes
+    const EV::EVOptions = EVOptions()          # decided as global for now so that can be called in functions
+end
 
-@time run_Model()
+@time m = run_model(:gurobi);
 
-# (; model, sets, vars) = model_done
+
+# (; model, sets, vars) = m
 
 # @time results = query_solutions(
 #     model,
@@ -52,3 +56,4 @@ const options::ModelOptions = ModelOptions(run=:trial)          # decided as glo
 
 # Plots.savefig(a, "gen_1d.png")
 # Plots.savefig(b, "sto_1d.png")
+
