@@ -10,7 +10,7 @@
 #=------------------------------------------------------------------------------
 ----- EV ADD on to MULTINODE
 ----- Year: 2021
------ by: Maria Taljeg�rd
+----- by: Maria Taljegård
 ----- last modified: 210421
 -------------------Scenarier i ELIN----------------------------------------------------------------------------------------------------------------------------------------------------------------
 The main unit is [MWh]
@@ -121,23 +121,23 @@ current constraints:
 
 # other road vehicle types than passenger cars, "LT" = light trucks, "HT" = heavy trucks and "Bus"=bus
 TRUCKS_BUSES = [
-    "LT",
-    "HT",
-    "BUS"
+    :LT,
+    :HT,
+    :BUS
 ]
 
 EV_eff = 0.95
 
 # Summarised charging infrastructure in Dict for easier calling
 EV_infrastructure = Dict(
-    15 => Dict("EVBat_Cap" => 15, :home => 0.71, :h6 => 0.74, :h3 => 0.81, :h1 => 0.87, :ers => 1.0),
-    30 => Dict("EVBat_Cap" => 30, :home => 0.83, :h6 => 0.91, :h3 => 0.92, :h1 => 0.95, :ers => 1.0),
-    60 => Dict("EVBat_Cap" => 60, :home => 0.92, :h6 => 0.96, :h3 => 0.96, :h1 => 0.97, :ers => 1.0),
-    85 => Dict("EVBat_Cap" => 85, :home => 0.94, :h6 => 0.97, :h3 => 0.99, :h1 => 0.99, :ers => 1.0)
+    15 => Dict(:EVBat_Cap => 15, :home => 0.71, :h6 => 0.74, :h3 => 0.81, :h1 => 0.87, :ers => 1.0),
+    30 => Dict(:EVBat_Cap => 30, :home => 0.83, :h6 => 0.91, :h3 => 0.92, :h1 => 0.95, :ers => 1.0),
+    60 => Dict(:EVBat_Cap => 60, :home => 0.92, :h6 => 0.96, :h3 => 0.96, :h1 => 0.97, :ers => 1.0),
+    85 => Dict(:EVBat_Cap => 85, :home => 0.94, :h6 => 0.97, :h3 => 0.99, :h1 => 0.99, :ers => 1.0)
 )
 
 # Fleet Battery Capacity (in kWh)
-EVBat_Cap = EV_infrastructure[options.BatCap]["EVBat_Cap"]
+EVBat_Cap = EV_infrastructure[options.BatCap][:EVBat_Cap]
 
 # Charging Power (kW)
 if EV.CP == 3.7

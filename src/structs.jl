@@ -34,37 +34,37 @@ end
 
 
 struct ModelSets # Sets
-    NODES               ::Vector{String}
-    TRANSMISSION_NODES  ::Vector{String}
-    SE3_TRANS_NODES     ::Vector{String}
-    NO1_TRANS_NODES     ::Vector{String}
-    DK1_TRANS_NODES     ::Vector{String}
-    COAST_NODES         ::Vector{String}
-    GBG                 ::Vector{String}
-    GEN_TECHS           ::Vector{String}
-    EL_GEN              ::Vector{String}
-    HEAT_GEN            ::Vector{String}
-    H2_GEN              ::Vector{String}
-    STO_TECHS           ::Vector{String}
-    EL_STO              ::Vector{String}
-    HEAT_STO            ::Vector{String}
-    H2_STO              ::Vector{String}
+    NODES               ::Vector{Union{String, Symbol}}
+    TRANSMISSION_NODES  ::Vector{Union{String, Symbol}}
+    SE3_TRANS_NODES     ::Vector{Union{String, Symbol}}
+    NO1_TRANS_NODES     ::Vector{Union{String, Symbol}}
+    DK1_TRANS_NODES     ::Vector{Union{String, Symbol}}
+    COAST_NODES         ::Vector{Union{String, Symbol}}
+    GBG                 ::Vector{Union{String, Symbol}}
+    GEN_TECHS           ::Vector{Union{String, Symbol}}
+    EL_GEN              ::Vector{Union{String, Symbol}}
+    HEAT_GEN            ::Vector{Union{String, Symbol}}
+    H2_GEN              ::Vector{Union{String, Symbol}}
+    STO_TECHS           ::Vector{Union{String, Symbol}}
+    EL_STO              ::Vector{Union{String, Symbol}}
+    HEAT_STO            ::Vector{Union{String, Symbol}}
+    H2_STO              ::Vector{Union{String, Symbol}}
     PERIODS             ::Vector{Int}
-    LINES               ::Vector{String}
-    NODE_FROM           ::Vector{String}
-    NODE_TO             ::Vector{String}
-    CHP                 ::Vector{String}
-    FC                  ::Vector{String}
-    WIND                ::Vector{String}
-    PV                  ::Vector{String}
-    HP                  ::Vector{String}
-    BOILER              ::Vector{String}
-    EC                  ::Vector{String}
-    FLEX_TH             ::Vector{String}
-    THERMAL_1H          ::Vector{String}
-    THERMAL_2H          ::Vector{String}
-    # THERMAL_8H          ::Vector{String}
-    THERMAL_12H         ::Vector{String}
+    LINES               ::Vector{Union{String, Symbol}}
+    NODE_FROM           ::Vector{Union{String, Symbol}}
+    NODE_TO             ::Vector{Union{String, Symbol}}
+    CHP                 ::Vector{Union{String, Symbol}}
+    FC                  ::Vector{Union{String, Symbol}}
+    WIND                ::Vector{Union{String, Symbol}}
+    PV                  ::Vector{Union{String, Symbol}}
+    HP                  ::Vector{Union{String, Symbol}}
+    BOILER              ::Vector{Union{String, Symbol}}
+    EC                  ::Vector{Union{String, Symbol}}
+    FLEX_TH             ::Vector{Union{String, Symbol}}
+    THERMAL_1H          ::Vector{Union{String, Symbol}}
+    THERMAL_2H          ::Vector{Union{String, Symbol}}
+    # THERMAL_8H          ::Vector{Union{String, Symbol}}
+    THERMAL_12H         ::Vector{Union{String, Symbol}}
 end
 
 
@@ -72,8 +72,8 @@ struct ModelParameters # Parameters
     SE3_price           ::Vector{Float64}
     NO1_price           ::Vector{Float64}
     DK1_price           ::Vector{Float64}
-    Gentech_data        ::Dict{String, DataFrameRow}
-    Stotech_data        ::Dict{String, DataFrameRow}
+    Gentech_data        ::Dict{}
+    Stotech_data        ::Dict{}
     Eldemand_data       ::DataFrame
     Reactive_Demand     ::DataFrame
     Heatdemand_data     ::DataFrame
@@ -83,12 +83,13 @@ struct ModelParameters # Parameters
     Gen_sin_ϕ           ::Vector{Float64}
     Demand_cos_ϕ        ::Float64
     Demand_sin_ϕ        ::Float64
-    Lines_props         ::Dict{String, DataFrameRow}
+    Lines_props         ::Dict{}
     # Vnom                ::Float64
 end
 
 
 mutable struct ModelVariables # Variables
+    # Union type for variables that can be excluded depending on model options
     total_cost              ::VariableRef
     capex                   ::VariableRef
     fix_om                  ::VariableRef

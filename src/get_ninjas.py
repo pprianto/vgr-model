@@ -290,14 +290,14 @@ if __name__ == "__main__":
     os.makedirs("ninjaprofile", mode, exist_ok=True)
     profile_folder = os.path.join(current_dir, "ninjaprofile")
 
-    subs_fn = os.path.join(input_folder, "subs_clean.csv")
+    subs_fn = os.path.join(input_folder, "subs_final.csv")
     subs = pd.read_csv(subs_fn, sep=";")
 
     # subs = subs[:2] # dummy for trial
 
 
     # API token from profile
-    token = "insert API token here"
+    token = "insert token here"
     api_base = "https://www.renewables.ninja/api/"
 
 
@@ -305,7 +305,7 @@ if __name__ == "__main__":
     re_techs = ["pv", "wind"]
     pv_axes = [0, 2]                       # fixed and double axis for opt tilt
     wt_techs = ["onshore", "offshore"]
-    profile_years = [2019]#, 2020]#, 2021, 2022, 2023]  # fetched profile year
+    profile_years = list(range(1980,2023)) # [2019]#, 2020]#, 2021, 2022, 2023]  # fetched profile year
 
 
     fetch_sequence(

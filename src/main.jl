@@ -13,7 +13,7 @@ Return:
 ------------------------------------------------------------------------------=#
 
 using DataFrames, CSV, XLSX, UnPack, Printf
-using JuMP, HiGHS, Ipopt, Gurobi
+using JuMP, HiGHS, Ipopt, Gurobi, COPT
 import AxisArrays, SparseArrays, LinearAlgebra
 import Plots, CairoMakie
 CairoMakie.activate!()
@@ -36,24 +36,23 @@ if options.EV == :yes
     const EV::EVOptions = EVOptions()          # decided as global for now so that can be called in functions
 end
 
-@time m = run_model(:gurobi);
+@time m = run_model(:copt);
 
 
-# (; model, sets, vars) = m
+(; model, sets, vars) = m
 
-# @time results = query_solutions(
-#     model,
-#     sets,
-#     vars
-# );
+@time results = query_solutions(
+    model,
+    sets,
+    vars
+);
 
 
-# vgr_gen_inv = vgr_investment(results.Generation_Investment)
-# vgr_sto_inv = vgr_investment(results.Storage_Investment)
+vgr_gen_inv = vgr_investment(results.Generation_Investment)
+vgr_sto_inv = vgr_investment(results.Storage_Investment)
 
-# a = basic_barchart(vgr_gen_inv)
-# b = basic_barchart(vgr_sto_inv)
+a = basic_barchart(vgr_gen_inv)
+b = basic_barchart(vgr_sto_inv)
 
 # Plots.savefig(a, "gen_1d.png")
 # Plots.savefig(b, "sto_1d.png")
-

@@ -65,7 +65,7 @@ Return:
 
     @time gen_constraints(model, sets, params, vars, grid_infra, profiles)
     if options.FlexLim == :yes
-        @time flex_lim(model, sets, params, vars, grid_infra, profiles)
+        @time flex_lim_constraints(model, sets, params, vars, grid_infra, profiles)
     end
     @time sto_constraints(model, sets, params, vars, grid_infra, profiles)
     @time enbal_constraints(model, sets, params, vars, grid_infra, profiles)
@@ -86,7 +86,7 @@ Return:
 
     set_solver(model, solver)
 
-    # optimize!(model)
+    optimize!(model)
 
     # if model == Model(Gurobi.Optimizer)
     #     compute_conflict!(model)
@@ -120,159 +120,6 @@ Return:
 end
 
 
-function build_model(
-    # model::Model,
-    # price::NamedTuple,
-    # grid_infra::NamedTuple,
-    # tech_props::NamedTuple,
-    # demand::NamedTuple,
-    # profiles::NamedTuple,
-    # options=ModelOptions(),
-    # solver=:gurobi,
-    filename::String,
-)
-#=------------------------------------------------------------------------------
--------------------------------- MODEL -----------------------------------------
-
-EXPERIMENTING
-
-Define the problem Model
-Taking the following:
-1. Sets
-2. Params
-3. Vars
-4. Constraints
-
-Return:
-1. Model in .mps file
-
-------------------------------------------------------------------------------=#
-
-    model = Model()
-
-    #=---------------------------------------------
-    INPUT DATA
-    ---------------------------------------------=#
-    println("---------------------------------------------")
-    println("Read input data")
-    println("---------------------------------------------")
-
-    price, grid_infra, tech_props, demand, profiles = read_input_data()
-
-    start_sets = time()
-
-    @time sets, params = make_sets(price, grid_infra, tech_props, demand)
-
-    time_sets = time()-start_sets  
-
-    println("---------------------------------------------")
-    println("Time needed to read input = $(time_sets / 60) mins")
-    println("---------------------------------------------")
-
-    #------------------------------------------------------------------------------=#
-    println("---------------------------------------------")
-    println("Define Variables")
-    println("---------------------------------------------")
-    start_vars = time()
-
-    @time vars = make_variables(model, sets, params)
-
-    time_vars = time()-start_vars  
-    println("---------------------------------------------")
-    println("Time needed to define variables = $(time_vars / 60) mins")
-    println("---------------------------------------------")
-
-    #------------------------------------------------------------------------------=#
-    println("---------------------------------------------")
-    println("Define Constraints")
-    println("---------------------------------------------")
-    start_const = time()
-
-    @time cost_constraints(model, sets, params, vars, grid_infra, profiles)
-    @time gen_constraints(model, sets, params, vars, grid_infra, profiles)
-    @time sto_constraints(model, sets, params, vars, grid_infra, profiles)
-    @time enbal_constraints(model, sets, params, vars, grid_infra, profiles)
-    @time power_flow_constraints(model, sets, params, vars, grid_infra, profiles)
-
-    time_consts = time()-start_const  
-    println("---------------------------------------------")
-    println("Time needed to define constraints = $(time_consts / 60) mins")
-    println("---------------------------------------------")
-
-    #------------------------------------------------------------------------------=#    
-    write_to_file(model, filename * ".mps")
-    
-    #=------------------------------------------------------------------------------
-    RETURN
-    ------------------------------------------------------------------------------=#  
-
-    # times = (;
-    #         time_sets,
-    #         time_vars,
-    #         time_consts,
-    #         time_solve
-    # )
-
-    # model_struct = ModelStruct(model, sets, params, vars, times)
-    
-    return model
-
-end
-
-
-function solve_model(
-    modelname::String,
-    solver::Symbol=:gurobi
-)
-#=------------------------------------------------------------------------------
--------------------------------- MODEL -----------------------------------------
-
-EXPERIMENTING
-
-Solve the problem Model
-Taking the following:
-1. Model
-
-Return:
-1. Model in .mps file
-
-------------------------------------------------------------------------------=#
-
-    model_file = joinpath(current_dir, modelname * ".mps")
-
-    m = read_from_file(model_file)
-
-    set_solver(m, solver)
-
-    println("---------------------------------------------")
-    println("Start Solving")
-    println("---------------------------------------------")
-    start_solve = time()
-
-    optimize!(m)
-
-    
-
-    # if model == Model(Gurobi.Optimizer)
-    #     compute_conflict!(model)
-
-    #     if get_attribute(model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
-    #         iis_model, _ = copy_conflict(model)
-    #         print(iis_model)
-    #     end
-    # end
-
-    time_solve = time()-start_solve  
-    println("---------------------------------------------")
-    println("Time needed to solve = $(time_solve / 60) mins")
-    println("---------------------------------------------")
-
-
-    return m
-
-end
-
-
 function read_input_data(
     # options=ModelOptions()
 )
@@ -283,7 +130,7 @@ function read_input_data(
     substations_df = read_file(joinpath(input_dir, "subs_final.csv"))
     lines_df = read_file(joinpath(input_dir, "lines_final.csv"))
     pp_df = read_file(joinpath(input_dir, "pp_final.csv"))
-    pp_df = rename_pp(pp_df)                                                                    # rename the tech according to the index sets
+    pp_df = process_pp(pp_df)                                                                    # rename the tech according to the index sets
 
     # technology properties
     # assume 2050
@@ -344,11 +191,27 @@ function set_solver(model, solver::Symbol = :gurobi)
                 "DisplayInterval" => 300,
         )
         
-        set_optimizer(model, optimizer)
- 
         # set_silent(model)
         # log_file = joinpath(results_dir, "1year_log.txt")
         # set_optimizer_attribute(model, "LogFile", log_file)
+
+    elseif solver == :copt
+        optimizer = optimizer_with_attributes(
+                COPT.Optimizer,
+                "LpMethod" => 2,        # -1=simple auto, 1=Dual simplex, 2=Barrier, 3=Crossover, 4=Concurrent, 5=heuristic auto, 6=PDLP
+                "BarIterLimit" => 1e9,
+                # "BarHomogeneous" => 1,  # 0=no, 1=yes
+                # "BarOrder" => 1,       # -1=auto, 0=Approximate Minimum Degree, 1=Nested Dissection
+                # "BarStart" => 2,       # -1=auto, 0=Asimple, 1=Mehrotra, 2=Modified Mehrotra
+                # "Crossover" => 1,       # 0=no, 1=yes
+                # "Presolve" => 4,        # -1=auto, 0=off, 1=fast, 2=normal, 3=aggressive, 4=unlimited (until nothing else possible)
+                # "Scaling" => 1,         # -1=auto, 0=no, 1=yes
+                # "GPUMode" => 1,       # 0=CPU, 1=GPU (used with PDLP algoritm, only for machine 41)
+                # "PDLPTol" => 1e-7,
+                "Threads" => 24,
+                "BarThreads" => 24,
+                "SimplexThreads" => 24,
+        )
 
     elseif solver == :highs
         optimizer = optimizer_with_attributes(
@@ -358,12 +221,12 @@ function set_solver(model, solver::Symbol = :gurobi)
             "solver" => "ipm",          # simplex, ipm=barrier, pdlp
             "run_crossover" => "off",
         )
-        
-        set_optimizer(model, optimizer)
 
     else
         @error "No solver named $(solver)."
     end
+
+    set_optimizer(model, optimizer)
 
 end
 
@@ -476,11 +339,11 @@ Considerations for data structure:
         Storage_Investment = sum_capacities(Storage_Investment)
 
         # Dispatch solutions
-        Generation_Dispatch = Dict{String, DataFrame}()
-        Reactive_Dispatch = Dict{String, DataFrame}()
-        Storage_Charge = Dict{String, DataFrame}()
-        Storage_Discharge = Dict{String, DataFrame}()
-        Storage_Level = Dict{String, DataFrame}()
+        Generation_Dispatch = Dict{Symbol, DataFrame}()
+        Reactive_Dispatch = Dict{Symbol, DataFrame}()
+        Storage_Charge = Dict{Symbol, DataFrame}()
+        Storage_Discharge = Dict{Symbol, DataFrame}()
+        Storage_Level = Dict{Symbol, DataFrame}()
 
         for node ∈ NODES
             Generation_Dispatch[node] = DataFrame(
@@ -513,7 +376,7 @@ Considerations for data structure:
         # for consideration
         # to adjust accordingly
 
-        combined_df = DataFrame(Node=String[], Tech=String[], Period=Int[], Value=Float64[])
+        combined_df = DataFrame(Node=Symbol[], Tech=Symbol[], Period=Int[], Value=Float64[])
 
         for (node, df) in Generation_Dispatch
             for (tech_idx, tech) in enumerate(GEN_TECHS)

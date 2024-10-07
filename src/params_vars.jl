@@ -77,8 +77,8 @@ Return
     # https://ens.dk/en/our-services/technology-catalogues/technology-data-renewable-fuels
     # https://ens.dk/en/our-services/technology-catalogues/technology-data-transport-energy
 
-    Gentech_data = Dict(tech_props.gen[!, :Tech] .=> eachrow(tech_props.gen[!, Not(:Tech)]))
-    Stotech_data = Dict(tech_props.sto[!, :Tech] .=> eachrow(tech_props.sto[!, Not(:Tech)]))
+    Gentech_data = Dict(Symbol.(tech_props.gen[!, :Tech]) .=> eachrow(tech_props.gen[!, Not(:Tech)]))
+    Stotech_data = Dict(Symbol.(tech_props.sto[!, :Tech]) .=> eachrow(tech_props.sto[!, Not(:Tech)]))
 
     #=------------------------------------------------------------------------------
     POWER FACTOR
@@ -97,8 +97,8 @@ Return
     ------------------------------------------------------------------------------=#
     # Extract power lines sets
     # and properties
-    lines_df, Ybus, G_Ybus, B_Ybus = lines_props(grid_infra.lines)
-    LINES_SETS, Lines_props = arcs_prep(lines_df)
+    prepped_lines = lines_props(grid_infra.lines)
+    LINES_SETS, Lines_props = lines_prep(prepped_lines.lines_df)
 
     @unpack LINES, 
             NODE_FROM, 
@@ -126,7 +126,7 @@ Return
     SUBSETS
     ------------------------------------------------------------------------------=#     
     # Coastal municipalities
-    # for offshore wind eligibility
+    # for offshore wind and sea water hp eligibility
     # Strömstad
     # Tanum
     # Lysekil
@@ -135,50 +135,50 @@ Return
     # Kungälv
     # Göteborg
     COAST_NODES = [
-        "GBG1",     # 1
-        "GBG2",
-        "GBG3",
-        "GBG4",
-        "GBG5",
-        "GBG6",
-        "GBG7",
-        "GBG8",
-        "GBG9",
-        "GBG10",    # 10
-        "GBG11",
-        "GBG12",
-        "KUN1",
-        "KUN2",
-        "KUN3",
-        "KUN4",
-        "STE1",
-        "ORU1",
-        "ORU2",
-        "LYS1",     # 20
-        "LYS2",
-        "TAN1",
-        "TAN2",
-        "TAN3",
-        "TAN4",
-        "STR1",
-        "STR2",
-        "STR3",     # 28
+        :GBG1,     # 1
+        :GBG2,
+        :GBG3,
+        :GBG4,
+        :GBG5,
+        :GBG6,
+        :GBG7,
+        :GBG8,
+        :GBG9,
+        :GBG10,    # 10
+        :GBG11,
+        :GBG12,
+        :KUN1,
+        :KUN2,
+        :KUN3,
+        :KUN4,
+        :STE1,
+        :ORU1,
+        :ORU2,
+        :LYS1,     # 20
+        :LYS2,
+        :TAN1,
+        :TAN2,
+        :TAN3,
+        :TAN4,
+        :STR1,
+        :STR2,
+        :STR3,     # 28
     ]
 
     # Pit Thermal Storage is not feasible in Gothenburg
     GBG = [
-        "GBG1",     # 1
-        "GBG2",
-        "GBG3",
-        "GBG4",
-        "GBG5",
-        "GBG6",
-        "GBG7",
-        "GBG8",
-        "GBG9",
-        "GBG10",    # 10
-        "GBG11",
-        "GBG12",
+        :GBG1,     # 1
+        :GBG2,
+        :GBG3,
+        :GBG4,
+        :GBG5,
+        :GBG6,
+        :GBG7,
+        :GBG8,
+        :GBG9,
+        :GBG10,    # 10
+        :GBG11,
+        :GBG12,
     ]
 
     #=------------------------------------------------------------------------------
@@ -194,9 +194,9 @@ Return
     TRANSMISSION NODES SUBSETS
     ------------------------------------------------------------------------------=# 
     trans_node = filter(row -> row.import_trans == true, grid_infra.subs)    
-    SE3_TRANS_NODES = filter(row -> !(row.node_id in ["MOL1", "DAL3"]), trans_node).node_id
-    NO1_TRANS_NODES = filter(row -> row.node_id == "DAL3", trans_node).node_id
-    DK1_TRANS_NODES = filter(row -> row.node_id == "MOL1", trans_node).node_id
+    SE3_TRANS_NODES = filter(row -> !(row.node_id in [:MOL1, :DAL3]), trans_node).node_id
+    NO1_TRANS_NODES = filter(row -> row.node_id == :DAL3, trans_node).node_id
+    DK1_TRANS_NODES = filter(row -> row.node_id == :MOL1, trans_node).node_id
     TRANSMISSION_NODES = trans_node.node_id
 
     #=------------------------------------------------------------------------------
@@ -204,80 +204,80 @@ Return
     ------------------------------------------------------------------------------=# 
     # manually defined from excel file input
     CHP = [             # CHP
-            "COCHP",    # coal chp
-            "WCHP",     # waste chp
-            "WCCHP",    # wood chips chp
-            "WPCHP",    # wood pellets chp
-            # "SBCHP"     # straw biomass chp
+            :COCHP,    # coal chp
+            :WCHP,     # waste chp
+            :WCCHP,    # wood chips chp
+            :WPCHP,    # wood pellets chp
+            # :SBCHP     # straw biomass chp
     ]
 
     FC = [              # fuel cells
-            "SOFC",     # solid oxide fuel cells
-            # "PFC"       # pem fuel cell
+            :SOFC,     # solid oxide fuel cells
+            # :PFC:       # pem fuel cell
     ]
 
     WIND = [
-            "WON",      # onshore
-            "WOFF"      # offshore
+            :WON,      # onshore
+            :WOFF      # offshore
     ]
 
     PV = [
-            "PVROOF",   # rooftop pv residential
-            "PVUTIL",   # fixed axis utility PV
-            "PVTRACK"   # single axis tracking utility PV
+        :PVROOF,   # rooftop pv residential
+            :PVUTIL,   # fixed axis utility PV
+            :PVTRACK   # single axis tracking utility PV
     ]
 
     HP = [
-            "HPAIR",    # heat pumps air source
-            "HPEX",      # heat pumps excess heat
-            "HPSW"      # seawater heat pumps
+            :HPAIR,    # heat pumps air source
+            :HPEX,      # heat pumps excess heat
+            :HPSW      # seawater heat pumps
     ]
 
     BOILER = [
-                "EB",   # electric boilers
-                "GB",    # natural gas boilers
-                "HBW"   # biomass heat only boiler
+                :EB,   # electric boilers
+                :GB,    # natural gas boilers
+                :HBW   # biomass heat only boiler
     ]
     
     EC = [
-            "AEC",      # alkali electrolyser
-            "PEMEC"     # pemec electrolyser
+            :AEC,      # alkali electrolyser
+            :PEMEC     # pemec electrolyser
     ]
 
     # thermal techs where flex lim applies
     FLEX_TH = [
-                "COCHP",
-                "GTSC",
-                "CCGT",
-                "GEBG",
-                "WCHP",
-                "WCCHP",
-                "WPCHP",
-                # "SBCHP"
+                :COCHP,
+                :GTSC,
+                :CCGT,
+                :GEBG,
+                :WCHP,
+                :WCCHP,
+                :WPCHP,
+                # :SBCHP
     ]
 
     # techs with 1 PERIODS or less start up time
     THERMAL_1H = [
-                    "GTSC",
-                    "GEBG"
+                    :GTSC,
+                    :GEBG
     ]
 
     # techs with 2 PERIODS start up time
     THERMAL_2H = [
-                    "CCGT",
-                    "WCHP"
+                    :CCGT,
+                    :WCHP
     ]
 
     # # techs with 8 PERIODS start up time
     # THERMAL_8H = [
-    #                 "SBCHP"
+    #                 :SBCHP:
     # ]
 
     # techs with 12 PERIODS start up time
     THERMAL_12H = [
-                    "COCHP",
-                    "WCCHP",
-                    "WPCHP"
+                    :COCHP,
+                    :WCCHP,
+                    :WPCHP
     ]
 
     #=------------------------------------------------------------------------------
@@ -285,37 +285,37 @@ Return
     ------------------------------------------------------------------------------=#
 
     sets =  ModelSets( 
-            NODES, 
-            TRANSMISSION_NODES,
-            SE3_TRANS_NODES,
-            NO1_TRANS_NODES,
-            DK1_TRANS_NODES,
-            COAST_NODES,
-            GBG,
-            GEN_TECHS, 
-            EL_GEN, 
-            HEAT_GEN, 
-            H2_GEN, 
-            STO_TECHS, 
-            EL_STO, 
-            HEAT_STO, 
-            H2_STO, 
-            PERIODS, 
-            LINES, 
-            NODE_FROM, 
-            NODE_TO, 
-            CHP,
-            FC,
-            WIND,
-            PV,
-            HP,
-            BOILER,
-            EC,
-            FLEX_TH,
-            THERMAL_1H,
-            THERMAL_2H,
-            # THERMAL_8H,
-            THERMAL_12H
+            Symbol.(NODES), 
+            Symbol.(TRANSMISSION_NODES),
+            Symbol.(SE3_TRANS_NODES),
+            Symbol.(NO1_TRANS_NODES),
+            Symbol.(DK1_TRANS_NODES),
+            Symbol.(COAST_NODES),
+            Symbol.(GBG),
+            Symbol.(GEN_TECHS), 
+            Symbol.(EL_GEN), 
+            Symbol.(HEAT_GEN), 
+            Symbol.(H2_GEN), 
+            Symbol.(STO_TECHS), 
+            Symbol.(EL_STO), 
+            Symbol.(HEAT_STO), 
+            Symbol.(H2_STO), 
+            Array(PERIODS), 
+            Symbol.(LINES), 
+            Symbol.(NODE_FROM), 
+            Symbol.(NODE_TO), 
+            Symbol.(CHP),
+            Symbol.(FC),
+            Symbol.(WIND),
+            Symbol.(PV),
+            Symbol.(HP),
+            Symbol.(BOILER),
+            Symbol.(EC),
+            Symbol.(FLEX_TH),
+            Symbol.(THERMAL_1H),
+            Symbol.(THERMAL_2H),
+            # Symbol.(THERMAL_8H),
+            Symbol.(THERMAL_12H)
     )
 
     params = ModelParameters( 
@@ -413,7 +413,7 @@ current variables:
     # reactive generation is assumed only applies for electricity generation technologies
     @variables model begin
         active_generation[t ∈ PERIODS, i ∈ NODES, x ∈ GEN_TECHS]  ≥ 0
-        reactive_generation[t ∈ PERIODS, i ∈ NODES, x ∈ EL_GEN]   ≥ 0
+        reactive_generation[t ∈ PERIODS, i ∈ NODES, x ∈ EL_GEN]
     end
 
     # Storage-related variables (MWh)
@@ -447,12 +447,12 @@ current variables:
     ------------------------------------------------------------------------------=#
     # EQ (33) - (35) #
     # export and import to/from transmission system
-    # ideally limited by transformer size (200 - 300 MVA would be reasonable for transmission transformer)
-    # and perhaps trading regulations?
+    # from ACCEL report, the subscription of Vattenfall Eldistribution - SvK is ~3200MW ≈ 400MW per nodes
+    # perhaps trading regulations or annual limit?
     @variables model begin
             import_export[t ∈ PERIODS, i ∈ TRANSMISSION_NODES]    ≥ 0
-        0 ≤ export_to[t ∈ PERIODS, i ∈ TRANSMISSION_NODES]        ≤ 300
-        0 ≤ import_from[t ∈ PERIODS, i ∈ TRANSMISSION_NODES]      ≤ 300
+        0 ≤ export_to[t ∈ PERIODS, i ∈ TRANSMISSION_NODES]        ≤ 400
+        0 ≤ import_from[t ∈ PERIODS, i ∈ TRANSMISSION_NODES]      ≤ 400
     end
 
     # import-export constraints
@@ -506,8 +506,6 @@ current variables:
         -Lines_props[l][:s_max] ≤ reactive_flow[t ∈ PERIODS, l ∈ LINES]   ≤ Lines_props[l][:s_max]
     end
 
-
-
     #=------------------------------------------------------------------------------
     EV-RELATED VARIABLES
     MARIA'S MODEL
@@ -528,120 +526,149 @@ current variables:
 
     if options.FlexLim == :yes && options.EV == :yes
 
-    return  ModelVariables( 
-            total_cost,
-            capex,
-            fix_om,
-            fuel_cost,
-            var_om,
-            start_part_costs,
-            exp_imp_costs,
-            tax_cost,
-            existing_generation,
-            generation_investment,
-            storage_investment,
-            active_generation,
-            reactive_generation,
-            generation_spin,
-            generation_on,
-            gen_startup_cost,
-            gen_partload_cost,
-            gen_startup_CO2,
-            gen_partload_CO2,
-            storage_charge,
-            storage_discharge,
-            storage_level,
-            nodal_voltage,
-            nodal_angle,
-            import_export,
-            export_to,
-            import_from,
-            active_flow,
-            reactive_flow,
-            pev_charging_slow,       
-            pev_discharge_net,       
-            pev_storage,             
-            pev_need,                
-    )
+        return  ModelVariables( 
+                total_cost,
+                capex,
+                fix_om,
+                fuel_cost,
+                var_om,
+                start_part_costs,
+                exp_imp_costs,
+                tax_cost,
+                existing_generation,
+                generation_investment,
+                storage_investment,
+                active_generation,
+                reactive_generation,
+                generation_spin,
+                generation_on,
+                gen_startup_cost,
+                gen_partload_cost,
+                gen_startup_CO2,
+                gen_partload_CO2,
+                storage_charge,
+                storage_discharge,
+                storage_level,
+                nodal_voltage,
+                nodal_angle,
+                import_export,
+                export_to,
+                import_from,
+                active_flow,
+                reactive_flow,
+                pev_charging_slow,       
+                pev_discharge_net,       
+                pev_storage,             
+                pev_need,                
+        )
 
     elseif options.FlexLim == :yes && options.EV == :no
 
-    return  ModelVariables( 
-            total_cost,
-            capex,
-            fix_om,
-            fuel_cost,
-            var_om,
-            start_part_costs,
-            exp_imp_costs,
-            tax_cost,
-            existing_generation,
-            generation_investment,
-            storage_investment,
-            active_generation,
-            reactive_generation,
-            generation_spin,
-            generation_on,
-            gen_startup_cost,
-            gen_partload_cost,
-            gen_startup_CO2,
-            gen_partload_CO2,
-            storage_charge,
-            storage_discharge,
-            storage_level,
-            nodal_voltage,
-            nodal_angle,
-            import_export,
-            export_to,
-            import_from,
-            active_flow,
-            reactive_flow,
-            nothing,       
-            nothing,       
-            nothing,             
-            nothing,                
-    )
+        return  ModelVariables( 
+                total_cost,
+                capex,
+                fix_om,
+                fuel_cost,
+                var_om,
+                start_part_costs,
+                exp_imp_costs,
+                tax_cost,
+                existing_generation,
+                generation_investment,
+                storage_investment,
+                active_generation,
+                reactive_generation,
+                generation_spin,
+                generation_on,
+                gen_startup_cost,
+                gen_partload_cost,
+                gen_startup_CO2,
+                gen_partload_CO2,
+                storage_charge,
+                storage_discharge,
+                storage_level,
+                nodal_voltage,
+                nodal_angle,
+                import_export,
+                export_to,
+                import_from,
+                active_flow,
+                reactive_flow,
+                nothing,       
+                nothing,       
+                nothing,             
+                nothing,                
+        )
 
     else
 
-    return  ModelVariables( 
-            total_cost,
-            capex,
-            fix_om,
-            fuel_cost,
-            var_om,
-            start_part_costs,
-            exp_imp_costs,
-            tax_cost,
-            existing_generation,
-            generation_investment,
-            storage_investment,
-            active_generation,
-            reactive_generation,
-            nothing,
-            nothing,
-            nothing,
-            nothing,
-            nothing,
-            nothing,
-            storage_charge,
-            storage_discharge,
-            storage_level,
-            nodal_voltage,
-            nodal_angle,
-            import_export,
-            export_to,
-            import_from,
-            active_flow,
-            reactive_flow,
-            nothing,       
-            nothing,       
-            nothing,             
-            nothing,                
-    )
+        return  ModelVariables( 
+                total_cost,
+                capex,
+                fix_om,
+                fuel_cost,
+                var_om,
+                start_part_costs,
+                exp_imp_costs,
+                tax_cost,
+                existing_generation,
+                generation_investment,
+                storage_investment,
+                active_generation,
+                reactive_generation,
+                nothing,
+                nothing,
+                nothing,
+                nothing,
+                nothing,
+                nothing,
+                storage_charge,
+                storage_discharge,
+                storage_level,
+                nodal_voltage,
+                nodal_angle,
+                import_export,
+                export_to,
+                import_from,
+                active_flow,
+                reactive_flow,
+                nothing,       
+                nothing,       
+                nothing,             
+                nothing,                
+        )
 
     end
 
-
-
 end         # end make_Variables
+
+
+function lines_prep(
+    lines_df::DataFrame
+)
+
+    lines = lines_df[!, [:lines_id, :node_from, :node_to, :g_total, :b_total, :s_max]]
+    lines[!, :arcs_fr] = [(row.lines_id, row.node_from, row.node_to) for row in eachrow(lines)]
+    lines[!, :arcs_to] = [(row.lines_id, row.node_to, row.node_from) for row in eachrow(lines)]
+    # lines[!, :arcs] = [lines[!, :arcs_fr]; lines[!, :arcs_to]]
+
+    # Power system sets
+    LINES = lines[!, :lines_id]         # power lines set
+    NODE_FROM = lines[!, :node_from]    # set of node from of the line
+    NODE_TO = lines[!, :node_to]        # set of node to of the line
+    ARCS_FR = lines[!, :arcs_fr]        # combined set of lines - nodes
+    ARCS_TO = lines[!, :arcs_to]
+
+    Lines_props = Dict(Symbol.(lines[!, :lines_id]) .=> eachrow(lines[!, Not(:lines_id)]))
+
+    lines_sets = (; 
+                LINES,
+                NODE_FROM, 
+                NODE_TO, 
+                ARCS_FR,
+                ARCS_TO
+            )
+
+    return lines_sets, Lines_props
+
+end

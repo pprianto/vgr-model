@@ -851,7 +851,7 @@ def maptofolium(reg, subs, pp, lines):
     ).add_to(regmap)
     
     fl.GeoJson(
-        subs,
+        subs.loc[subs['import_trans'] == False],
         name="Substation",
         marker=fl.Circle(
                          radius=10, 
@@ -869,22 +869,86 @@ def maptofolium(reg, subs, pp, lines):
     ).add_to(regmap)
     
     fl.GeoJson(
-        pp,
-        name="Generation",
+        subs.loc[
+                (subs['import_trans'] == True) &
+                (subs['node_id'] == 'DAL3')
+                ],
+        name="Transformer Substations",
         marker=fl.Circle(
-                         radius=6, 
+                         radius=20, 
                          fill_color="red", 
-                         fill_opacity=0.4, 
+                         fill_opacity=0.5, 
                          color="red", 
-                         weight=2
+                         weight=10
         ),
         tooltip=fl.GeoJsonTooltip(
             fields=[
-                    "el_MW", 
-                    "heat_MW", 
-                    "tech"
+                    "node_id", 
+                    "voltage", 
+                    "substation"
         ]),
     ).add_to(regmap)
+
+    fl.GeoJson(
+        subs.loc[
+                (subs['import_trans'] == True) &
+                (subs['node_id'] == 'MOL1')
+                ],
+        name="Transformer Substations",
+        marker=fl.Circle(
+                         radius=20, 
+                         fill_color="orange", 
+                         fill_opacity=0.5, 
+                         color="orange", 
+                         weight=10
+        ),
+        tooltip=fl.GeoJsonTooltip(
+            fields=[
+                    "node_id", 
+                    "voltage", 
+                    "substation"
+        ]),
+    ).add_to(regmap)
+
+    fl.GeoJson(
+        subs.loc[
+                (subs['import_trans'] == True) &
+                (subs['node_id'] != 'MOL1') &
+                (subs['node_id'] != 'DAL3')
+                ],
+        name="Transformer Substations",
+        marker=fl.Circle(
+                         radius=20, 
+                         fill_color="lightgreen", 
+                         fill_opacity=0.5, 
+                         color="lightgreen", 
+                         weight=10
+        ),
+        tooltip=fl.GeoJsonTooltip(
+            fields=[
+                    "node_id", 
+                    "voltage", 
+                    "substation"
+        ]),
+    ).add_to(regmap)
+
+    # fl.GeoJson(
+    #     pp,
+    #     name="Generation",
+    #     marker=fl.Circle(
+    #                      radius=6, 
+    #                      fill_color="red", 
+    #                      fill_opacity=0.4, 
+    #                      color="red", 
+    #                      weight=2
+    #     ),
+    #     tooltip=fl.GeoJsonTooltip(
+    #         fields=[
+    #                 "el_MW", 
+    #                 "heat_MW", 
+    #                 "tech"
+    #     ]),
+    # ).add_to(regmap)
     
     fl.GeoJson(
         lines,
@@ -934,6 +998,7 @@ The following are the sequence to build the el network
 
 if __name__ == "__main__":
 
+    # choose folder name for input folder
     input_folder = prerequisites("inputs")
 
     osmlines_fn = getinputfiles("lines_raw.geojson", input_folder)
@@ -970,12 +1035,15 @@ if __name__ == "__main__":
     lines_clean['station_from'] = lines_clean['station_from'] + 1
     lines_clean['station_to'] = lines_clean['station_to'] + 1
 
-    savefile(subs_clean, "subs_clean", input_folder)
-    savefile(lines_clean, "lines_clean", input_folder)
-    savefile(pp_clean, "pp_clean", input_folder)
+    # if need to save the files
+    # usually needed for group_demand steps
+    # savefile(subs_clean, "subs_clean", input_folder)
+    # savefile(lines_clean, "lines_clean", input_folder)
+    # savefile(pp_clean, "pp_clean", input_folder)
 
     vgr_map = maptofolium(vgr_kommun, subs_clean, pp_clean, lines_clean)
-    map_file = os.path.join(input_folder, 'vgr_clean.html')
-    vgr_map.save(map_file)
+    map_file = os.path.join(input_folder, 'import.html')
+    # vgr_map.save(map_file)
+    display(vgr_map)
 
 

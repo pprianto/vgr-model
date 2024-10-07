@@ -92,7 +92,7 @@ filter df based on tech carrier
 end
 
 
-function rename_pp(
+function process_pp(
     pp_df::DataFrame
 )
     
@@ -111,13 +111,36 @@ function rename_pp(
 
     pp_df[!, :tech] = [tech_names[name] for name in pp_df[:, :tech]]
 
-
     # replace missing values in installed capacity column with 0.0
     power_cols = [:el_MW, :heat_MW]
 
     for col in power_cols
         pp_df[!, col] = replace(pp_df[:, col], missing => 0.0)
     end
+
+    # Stenungsund decommissionioned, power set to 0
+    stenungsund_pp = findall(x -> x in [15009765], pp_df.pp_id)
+    pp_df[stenungsund_pp, :el_MW] .= 0.0
+
+    # hydro capacities adjusted based on
+    # https://vattenkraft.info/
+    # crosscheck with vattenfall or relevant websites
+    hydro_change = findall(x -> x in [
+                                    88144184,   # olidans
+                                    10884545,   # vargons
+                                    528968206,  # kungfors
+                                    125589869   # lilla edet
+                                    ],
+                            pp_df.pp_id
+    )
+
+    # ordered based on appearance in the rows
+    pp_df[hydro_change, :el_MW] .= [
+                                    3.0,    # kungfors
+                                    91.0,   # olidans
+                                    35.0,   # vargons
+                                    46.0    # lilla edet
+                                ]
 
     return pp_df
 
@@ -238,40 +261,12 @@ use short line model
     # comparing to the admittance matrix method with incidence matrix
     Ybus, G, B = admittance_matrix(lines_df)
 
-    return lines_df, Ybus, G, B
+    return (; lines_df, Ybus, G, B)
 
 end
 
 
-function arcs_prep(
-    lines_df::DataFrame
-)
 
-    lines = lines_df[!, [:lines_id, :node_from, :node_to, :g_total, :b_total, :s_max]]
-    lines[!, :arcs_fr] = [(row.lines_id, row.node_from, row.node_to) for row in eachrow(lines)]
-    lines[!, :arcs_to] = [(row.lines_id, row.node_to, row.node_from) for row in eachrow(lines)]
-    # lines[!, :arcs] = [lines[!, :arcs_fr]; lines[!, :arcs_to]]
-
-    # Power system sets
-    LINES = lines[!, :lines_id]         # power lines set
-    NODE_FROM = lines[!, :node_from]    # set of node from of the line
-    NODE_TO = lines[!, :node_to]        # set of node to of the line
-    ARCS_FR = lines[!, :arcs_fr]        # combined set of lines - nodes
-    ARCS_TO = lines[!, :arcs_to]
-
-    Lines_props = Dict(lines[!, :lines_id] .=> eachrow(lines[!, Not(:lines_id)]))
-
-    lines_sets = (; 
-                LINES,
-                NODE_FROM, 
-                NODE_TO, 
-                ARCS_FR,
-                ARCS_TO
-            )
-
-    return lines_sets, Lines_props
-
-end
 
 
 #=---------------------------------------------

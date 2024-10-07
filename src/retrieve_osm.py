@@ -907,8 +907,11 @@ The following are the sequence to retrieve and clean the OSM data
 
 if __name__ == "__main__":
 
+    # choose folder name for input folder
     input_folder = prerequisites("inputs")
 
+    # to adjust according to area of interest
+    # here, it uses Västra Götaland
     rawsubs_df, rawlines_df, rawgens_df, rawplants_df = collect_from_osm('Västra Götaland')
 
     lans_file = getinputfiles('Lan_Sweref99TM_region.shp', input_folder)
@@ -922,23 +925,27 @@ if __name__ == "__main__":
     vgr_lan = reg_bound(lans)
     vgr_kommun = reg_bound(kommuns)
 
+    # To adjust according to required voltage level
     lines_df, subs_df, pp_df = retrieve_osm(rawlines_df, 
                                             rawsubs_df, 
                                             rawgens_df, 
                                             rawplants_df, 
                                             vgr_reg, 
                                             vgr_kommun, 
-                                            100000, 
-                                            200000
+                                            100000, # lower bound voltage level
+                                            200000  # upper bound voltage level
                                 )
 
-    savefile(lines_df, "lines_raw", input_folder)
-    savefile(subs_df, "subs_raw", input_folder)
-    savefile(pp_df, "pp_raw", input_folder)
+    # if need to save the files
+    # usually needed for build_elnet steps
+    # savefile(lines_df, "lines_raw", input_folder)
+    # savefile(subs_df, "subs_raw", input_folder)
+    # savefile(pp_df, "pp_raw", input_folder)
 
     # osm_map = maptofolium(vgr_kommun, rawsubs_df, rawgens_df, rawlines_df)
     # display(osm_map)
 
+    # to plot step
     vgr_map = maptofolium(vgr_kommun, subs_df, pp_df, lines_df)
     map_file = os.path.join(input_folder, 'vgr_osm.html')
     vgr_map.save(map_file)
