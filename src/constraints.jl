@@ -7,7 +7,8 @@ function cost_constraints(
     # vars::ModelVariables,
     vars::NamedTuple,
     grid_infra::GridInfrastructures,
-    profiles::Profiles
+    # profiles::Profiles
+    profiles::NamedTuple
 )
 
 #=------------------------------------------------------------------------------
@@ -295,7 +296,8 @@ function gen_constraints(
     # vars::ModelVariables,
     vars::NamedTuple,
     grid_infra::GridInfrastructures,
-    profiles::Profiles
+    # profiles::Profiles
+    profiles::NamedTuple
 )
 
 #=------------------------------------------------------------------------------
@@ -612,7 +614,8 @@ function flex_lim_constraints(
     # vars::ModelVariables,
     vars::NamedTuple,
     grid_infra::GridInfrastructures,
-    profiles::Profiles
+    # profiles::Profiles
+    profiles::NamedTuple
 )
 
 #=------------------------------------------------------------------------------
@@ -751,7 +754,8 @@ function sto_constraints(
     # vars::ModelVariables,
     vars::NamedTuple,
     grid_infra::GridInfrastructures,
-    profiles::Profiles
+    # profiles::Profiles
+    profiles::NamedTuple
 )
 
 #=------------------------------------------------------------------------------
@@ -848,7 +852,8 @@ function enbal_constraints(
     # vars::ModelVariables,
     vars::NamedTuple,
     grid_infra::GridInfrastructures,
-    profiles::Profiles
+    # profiles::Profiles
+    profiles::NamedTuple
 )
 
 #=------------------------------------------------------------------------------
@@ -940,12 +945,13 @@ current constraints:
                 sum(active_generation[t, node, x] / Gentech_data[x].Efficiency for x ∈ EC) +     # for electrolyser / H2 demand
                 sum(storage_charge[t, node, s] for s ∈ EL_STO) +                                 # charge battery
                 sum(storage_charge[t, node, s] * 0.02 for s ∈ H2_STO) +                          # charge  h2 storage compressor, 2% of storage
+                (node in TRANSMISSION_NODES ? export_to[t, node] : 0) + 
                 p_exit ≤                                                                         # el flow to other nodes
                 sum(active_generation[t, node, x] for x ∈ EL_GEN) +                              # el generation (active)
                 sum(storage_discharge[t, node, s] for s ∈ EL_STO) +                              # battery discharge
                 sum(active_generation[t, node, x] for x ∈ FC) +                                  # this applies for Fuel Cell (H2 -> EL)
                 p_enter +                                                                        # el flow to this node
-                (node in TRANSMISSION_NODES ? import_export[t, node] : 0)                        # import/export
+                (node in TRANSMISSION_NODES ? import_from[t, node] : 0)                        # import/export
             )
             
             # EQ (32) #
@@ -1014,7 +1020,8 @@ function power_flow_constraints(
     # vars::ModelVariables,
     vars::NamedTuple,
     grid_infra::GridInfrastructures,
-    profiles::Profiles
+    # profiles::Profiles
+    profiles::NamedTuple
 )
 
 #=------------------------------------------------------------------------------

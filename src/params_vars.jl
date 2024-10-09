@@ -48,9 +48,9 @@ Return
     elseif options.run == :trial || :test
         # trial runs
         # adjust hour accordingly
-        Eldemand_data = demand.el[1:24, :]
-        Heatdemand_data = demand.heat[1:24, :]
-        H2demand_data = demand.h2[1:24, :]
+        Eldemand_data = demand.el[1:168, :]
+        Heatdemand_data = demand.heat[1:168, :]
+        H2demand_data = demand.h2[1:168, :]
 
     else
         @error "No run type named $run."
@@ -77,8 +77,8 @@ Return
     # https://ens.dk/en/our-services/technology-catalogues/technology-data-renewable-fuels
     # https://ens.dk/en/our-services/technology-catalogues/technology-data-transport-energy
 
-    Gentech_data = Dict(Symbol.(tech_props.gen[!, :Tech]) .=> eachrow(tech_props.gen[!, Not(:Tech)]))
-    Stotech_data = Dict(Symbol.(tech_props.sto[!, :Tech]) .=> eachrow(tech_props.sto[!, Not(:Tech)]))
+    Gentech_data = Dict(Symbol.(tech_props.gen[!, :Tech]) .=> NamedTuple.(eachrow(tech_props.gen[!, Not(:Tech)])))
+    Stotech_data = Dict(Symbol.(tech_props.sto[!, :Tech]) .=> NamedTuple.(eachrow(tech_props.sto[!, Not(:Tech)])))
 
     #=------------------------------------------------------------------------------
     POWER FACTOR
@@ -118,7 +118,7 @@ Return
     if options.run == :full
         PERIODS = demand.el[!, :hour]               # time period set (hourly), full run
     elseif options.run == :trial || :test
-        PERIODS = demand.el[1:24, :hour]             # time period set (hourly), trial runs
+        PERIODS = demand.el[1:168, :hour]             # time period set (hourly), trial runs
     else
         @error "No run type named $run."
     end

@@ -266,7 +266,26 @@ use short line model
 end
 
 
+function df_to_axisarrays(
+    df::DataFrame
+)
 
+    # Convert the DataFrame to an Array
+    matrix_df = Matrix(df)
+
+    # Get column names and convert them to Symbols
+    col_names = Symbol.(names(df))
+
+    # Create an AxisArray with the column names as labels (for the second axis, i.e., columns)
+    df_in_axis_arrays = AxisArrays.AxisArray(
+                    matrix_df, 
+                    1:size(matrix_df, 1), 
+                    col_names
+    )
+
+    return df_in_axis_arrays
+
+end
 
 
 #=---------------------------------------------

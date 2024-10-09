@@ -63,7 +63,7 @@ Return:
     println("---------------------------------------------")
     start_const = time()
 
-    # @time gen_constraints(model, sets, params, vars, grid_infra, profiles)
+    @time gen_constraints(model, sets, params, vars, grid_infra, profiles)
     if options.FlexLim == :yes
         @time flex_lim_constraints(model, sets, params, vars, grid_infra, profiles)
     end
@@ -84,9 +84,9 @@ Return:
     println("---------------------------------------------")
     start_solve = time()
 
-    # set_solver(model, solver)
+    set_solver(model, solver)
 
-    # optimize!(model)
+    optimize!(model)
 
     # if model == Model(Gurobi.Optimizer)
     #     compute_conflict!(model)
@@ -150,6 +150,12 @@ function read_input_data(
     WT_on_profile = read_file(joinpath(input_dir, "nodal_profile_onshore_wind_$(options.profile_year).csv"))       # onshore wind
     WT_off_profile = read_file(joinpath(input_dir, "nodal_profile_offshore_wind_$(options.profile_year).csv"))     # offshore wind
 
+    # RE profile in axis arrays
+    PVfix = df_to_axisarrays(PV_fix_profile)          # fixed axis pv
+    PVopt = df_to_axisarrays(PV_opt_profile)    # opt tracking pv
+    WTon = df_to_axisarrays(WT_on_profile)       # onshore wind
+    WToff = df_to_axisarrays(WT_off_profile)     # offshore wind
+
     # collections of input data in NamedTuple
     # price = (; SE3=Array(elpris_df.SE3), NO1=Array(elpris_df.NO1), DK1=Array(elpris_df.DK1))
     # grid_infra = (; subs=substations_df, lines=lines_df, pp=pp_df)
@@ -162,7 +168,8 @@ function read_input_data(
     grid_infra = GridInfrastructures(substations_df, lines_df, pp_df)
     tech_props = TechProps(gen_tech_df, sto_tech_df)
     demand = Demands(el_demand_df, heat_demand_df, h2_demand_df)
-    profiles = Profiles(PV_fix_profile, PV_opt_profile, WT_on_profile, WT_off_profile)
+    # profiles = Profiles(PV_fix_profile, PV_opt_profile, WT_on_profile, WT_off_profile)
+    profiles = (; PVfix, PVopt, WTon, WToff)
 
     return price, grid_infra, tech_props, demand, profiles
 
@@ -234,8 +241,10 @@ end
 
 function query_solutions(
     model::Model,
-    sets::ModelSets,
-    vars::ModelVariables,
+    # sets::ModelSets,
+    # vars::ModelVariables,
+    sets::NamedTuple,
+    vars::NamedTuple,    
 )
 #=------------------------------------------------------------------------------
 ---------------------------- QUERY SOLUTIONS -----------------------------------
