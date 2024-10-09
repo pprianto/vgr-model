@@ -34,37 +34,37 @@ end
 
 
 struct ModelSets # Sets
-    NODES               ::Vector{Union{String, Symbol}}
-    TRANSMISSION_NODES  ::Vector{Union{String, Symbol}}
-    SE3_TRANS_NODES     ::Vector{Union{String, Symbol}}
-    NO1_TRANS_NODES     ::Vector{Union{String, Symbol}}
-    DK1_TRANS_NODES     ::Vector{Union{String, Symbol}}
-    COAST_NODES         ::Vector{Union{String, Symbol}}
-    GBG                 ::Vector{Union{String, Symbol}}
-    GEN_TECHS           ::Vector{Union{String, Symbol}}
-    EL_GEN              ::Vector{Union{String, Symbol}}
-    HEAT_GEN            ::Vector{Union{String, Symbol}}
-    H2_GEN              ::Vector{Union{String, Symbol}}
-    STO_TECHS           ::Vector{Union{String, Symbol}}
-    EL_STO              ::Vector{Union{String, Symbol}}
-    HEAT_STO            ::Vector{Union{String, Symbol}}
-    H2_STO              ::Vector{Union{String, Symbol}}
+    NODES               ::Vector{Symbol}
+    TRANSMISSION_NODES  ::Vector{Symbol}
+    SE3_TRANS_NODES     ::Vector{Symbol}
+    NO1_TRANS_NODES     ::Vector{Symbol}
+    DK1_TRANS_NODES     ::Vector{Symbol}
+    COAST_NODES         ::Vector{Symbol}
+    GBG                 ::Vector{Symbol}
+    GEN_TECHS           ::Vector{Symbol}
+    EL_GEN              ::Vector{Symbol}
+    HEAT_GEN            ::Vector{Symbol}
+    H2_GEN              ::Vector{Symbol}
+    STO_TECHS           ::Vector{Symbol}
+    EL_STO              ::Vector{Symbol}
+    HEAT_STO            ::Vector{Symbol}
+    H2_STO              ::Vector{Symbol}
     PERIODS             ::Vector{Int}
-    LINES               ::Vector{Union{String, Symbol}}
-    NODE_FROM           ::Vector{Union{String, Symbol}}
-    NODE_TO             ::Vector{Union{String, Symbol}}
-    CHP                 ::Vector{Union{String, Symbol}}
-    FC                  ::Vector{Union{String, Symbol}}
-    WIND                ::Vector{Union{String, Symbol}}
-    PV                  ::Vector{Union{String, Symbol}}
-    HP                  ::Vector{Union{String, Symbol}}
-    BOILER              ::Vector{Union{String, Symbol}}
-    EC                  ::Vector{Union{String, Symbol}}
-    FLEX_TH             ::Vector{Union{String, Symbol}}
-    THERMAL_1H          ::Vector{Union{String, Symbol}}
-    THERMAL_2H          ::Vector{Union{String, Symbol}}
-    # THERMAL_8H          ::Vector{Union{String, Symbol}}
-    THERMAL_12H         ::Vector{Union{String, Symbol}}
+    LINES               ::Vector{Symbol}
+    NODE_FROM           ::Vector{Symbol}
+    NODE_TO             ::Vector{Symbol}
+    CHP                 ::Vector{Symbol}
+    FC                  ::Vector{Symbol}
+    WIND                ::Vector{Symbol}
+    PV                  ::Vector{Symbol}
+    HP                  ::Vector{Symbol}
+    BOILER              ::Vector{Symbol}
+    EC                  ::Vector{Symbol}
+    FLEX_TH             ::Vector{Symbol}
+    THERMAL_1H          ::Vector{Symbol}
+    THERMAL_2H          ::Vector{Symbol}
+    # THERMAL_8H          ::Vector{Symbol}
+    THERMAL_12H         ::Vector{Symbol}
 end
 
 

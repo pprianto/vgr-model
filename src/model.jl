@@ -84,9 +84,9 @@ Return:
     println("---------------------------------------------")
     start_solve = time()
 
-    set_solver(model, solver)
+    # set_solver(model, solver)
 
-    optimize!(model)
+    # optimize!(model)
 
     # if model == Model(Gurobi.Optimizer)
     #     compute_conflict!(model)

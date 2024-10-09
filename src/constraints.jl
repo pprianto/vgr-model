@@ -140,29 +140,35 @@ current constraints:
     )
 
     # fix O&M costs (in k€/MW)
+    # subsets to use in this constraint
+    NOT_EC = setdiff(GEN_TECHS, EC)
+    NOT_VRBAT = setdiff(STO_TECHS, [:VRBAT])
     @constraint(model, 
         fix_om ≥
         # generation tech fix O&M costs, electrolyser defined differently since the fix OM is based on % of investment
         sum(
-            sum(generation_investment[i, x] * Gentech_data[x].FixOM for x ∈ GEN_TECHS if x ∉ EC ) +                                              
+            sum(generation_investment[i, x] * Gentech_data[x].FixOM for x ∈ NOT_EC) +                                              
             # generation tech fix O&M costs for electrolyser
-            sum((generation_investment[i, x] * Gentech_data[x].InvCost * CRF_gen[x]) * Gentech_data[x].FixOM for x ∈ GEN_TECHS if x ∈ EC ) +    
+            sum((generation_investment[i, x] * Gentech_data[x].InvCost * CRF_gen[x]) * Gentech_data[x].FixOM for x ∈ EC ) +    
             # storage tech fix O&M costs, vanadium redox defined differently since the fix OM is based on % of investment
-            sum(storage_investment[i, s] * Stotech_data[s].FixOM for s ∈ STO_TECHS if s != :VRBAT) +                                            
+            sum(storage_investment[i, s] * Stotech_data[s].FixOM for s ∈ NOT_VRBAT) +                                            
             # storage tech fix O&M costs for vanadium redox
             sum((storage_investment[i, :VRBAT] * Stotech_data[:VRBAT].InvCost * CRF_sto[:VRBAT]) * Stotech_data[:VRBAT].FixOM)
         for i ∈ NODES ) 
     )
 
     # fuel costs (in €/MWh)
+    # subsets to use in this constraint
+    TECHS_W_EL_PRICE = [HP; EC; :EB]
+    TECHS_W_FUEL = setdiff(GEN_TECHS, TECHS_W_EL_PRICE) # first argument is the larger set
     @constraint(model, 
         fuel_cost ≥ 
         # operational costs for techs that use fuel 
         sum( 
             sum(
-                sum(active_generation[t, i, x] * Gentech_data[x].FuelPrice / Gentech_data[x].Efficiency for x ∈ GEN_TECHS if x ∉ [HP, EC, :EB]) +
+                sum(active_generation[t, i, x] * Gentech_data[x].FuelPrice / Gentech_data[x].Efficiency for x ∈ TECHS_W_FUEL) +
                 # operational costs for HP and electrolyser uses elprice
-                sum(active_generation[t, i, x] * SE3_price[t] / Gentech_data[x].Efficiency for x ∈ GEN_TECHS if x ∈ [HP, EC, :EB] )
+                sum(active_generation[t, i, x] * SE3_price[t] / Gentech_data[x].Efficiency for x ∈ TECHS_W_EL_PRICE)
                 for i ∈ NODES)
         for t ∈ PERIODS)
     )
@@ -388,7 +394,7 @@ current constraints:
     # limits of area for each node based on Voronoi cell
     # assume 10% of the available area in 1000 m2
     # need to be better represented!!
-    node_area = Dict(row.node_id => row.area_m2 for row ∈ eachrow(grid_infra.subs))
+    # node_area = Dict(row.node_id => row.area_m2 for row ∈ eachrow(grid_infra.subs))
 
     # for node ∈ NODES
     #     @constraint(model,
@@ -402,31 +408,29 @@ current constraints:
     # Seawater Heat Pumps (HPSW) could only be invested in coastal area
     # does not make sense to buy sea water and transport it
     
+    # define subset not coastal node
+    NOT_COAST = setdiff(NODES, COAST_NODES)
     for t ∈ PERIODS
-        for node ∈ NODES
-            if node ∉ COAST_NODES
-                fix(
-                active_generation[t, node, :WOFF], 
-                0.0, 
-                force=true
-                )
-            end
+        for node ∈ NOT_COAST
+            fix(
+            active_generation[t, node, :WOFF], 
+            0.0, 
+            force=true
+            )
         end
     end
 
-    for node ∈ NODES
-        if node ∉ COAST_NODES
-            fix(
-            generation_investment[node, :WOFF], 
-            0.0, 
-            force=true
-            )
-            
-            fix(generation_investment[node, :HPSW], 
-            0.0, 
-            force=true
-            )
-        end
+    for node ∈ NOT_COAST
+        fix(
+        generation_investment[node, :WOFF], 
+        0.0, 
+        force=true
+        )
+        
+        fix(generation_investment[node, :HPSW], 
+        0.0, 
+        force=true
+        )
     end
 
     # techs that most probably not invested in future
@@ -549,10 +553,14 @@ current constraints:
     # Wind, PV, FLEX_TH are excluded because they are defined differently
     
     if options.FlexLim == :yes
-        @constraint(model, Active_Generation_Limit_up[t ∈ PERIODS, i ∈ NODES, x ∈ GEN_TECHS; x ∉ [WIND, PV, FLEX_TH]],
+        # subset of not so general gen tech
+        NOT_GENERAL_GEN_TECHS = [WIND; PV; FLEX_TH]
+        @constraint(model, Active_Generation_Limit_up[t ∈ PERIODS, i ∈ NODES, x ∈ NOT_GENERAL_GEN_TECHS],
             active_generation[t, i, x] ≤ existing_generation[i, x] + generation_investment[i, x])
     else
-        @constraint(model, Active_Generation_Limit_up[t ∈ PERIODS, i ∈ NODES, x ∈ GEN_TECHS; x ∉ [WIND, PV]],
+        # subset of not so general gen tech
+        NOT_GENERAL_GEN_TECHS = [WIND; PV]
+        @constraint(model, Active_Generation_Limit_up[t ∈ PERIODS, i ∈ NODES, x ∈ NOT_GENERAL_GEN_TECHS],
         active_generation[t, i, x] ≤ existing_generation[i, x] + generation_investment[i, x])
     end  
 
@@ -566,19 +574,23 @@ current constraints:
     # Bounds of reactive generation
     # according to SvK requirement for generators
     # https://www.svk.se/om-kraftsystemet/legalt-ramverk/eu-lagstiftning-/natanslutning-av-generatorer-rfg/
+
+    #subsets of Power Park Modules (PPM) and Synchronous
+    PPM_GEN = [WIND; PV; FC]
+    SYNC_GEN = setdiff(EL_GEN, PPM_GEN)
     @constraints model begin
         # Power Park Modules
-        Reactive_Generation_Limit_PPM_low[t ∈ PERIODS, i ∈ NODES, x ∈ EL_GEN; x ∈ [WIND, PV, FC]],
+        Reactive_Generation_Limit_PPM_low[t ∈ PERIODS, i ∈ NODES, x ∈ PPM_GEN],
             - 1/3 * active_generation[t, i, x] ≤ reactive_generation[t, i, x]
 
-        Reactive_Generation_Limit_PPM_up[t ∈ PERIODS, i ∈ NODES, x ∈ EL_GEN; x ∈ [WIND, PV, FC]],
+        Reactive_Generation_Limit_PPM_up[t ∈ PERIODS, i ∈ NODES, x ∈ PPM_GEN],
             reactive_generation[t, i, x] ≤ 1/3 * active_generation[t, i, x]
 
         # Conventional/Synchronous PP
-        Reactive_Generation_Limit_Syn_low[t ∈ PERIODS, i ∈ NODES, x ∈ EL_GEN; x ∉ [WIND, PV, FC]],
+        Reactive_Generation_Limit_Syn_low[t ∈ PERIODS, i ∈ NODES, x ∈ SYNC_GEN],
             - 1/6 * (existing_generation[i, x] + generation_investment[i, x]) ≤ reactive_generation[t, i, x]        
 
-        Reactive_Generation_Limit_Syn_up[t ∈ PERIODS, i ∈ NODES, x ∈ EL_GEN; x ∉ [WIND, PV, FC]],
+        Reactive_Generation_Limit_Syn_up[t ∈ PERIODS, i ∈ NODES, x ∈ SYNC_GEN],
             reactive_generation[t, i, x] ≤ 1/3 * (existing_generation[i, x] + generation_investment[i, x])
     end
 
@@ -662,7 +674,8 @@ current constraints:
     )
 
     # start-up limits
-    @constraint(model, Hourly_increment[t ∈ PERIODS, i ∈ NODES, x ∈ FLEX_TH; t ≥ 2],
+    FOR_STARTUP = 2:length(PERIODS)
+    @constraint(model, Hourly_increment[t ∈ FOR_STARTUP, i ∈ NODES, x ∈ FLEX_TH],
         generation_on[t, i, x] ≥ 
         generation_spin[t, i, x] - generation_spin[t-1, i, x]
     )
@@ -689,16 +702,18 @@ current constraints:
 
     # Ramping limits
     # should apply when the period is longer than a day
-    if size(PERIODS, 1) ≥ 12
+    if length(PERIODS) ≥ 12
         # new tech sets based on the start up time duration
         # defined manually based on data in excel
 
-        @constraint(model, Ramp_1h[t ∈ PERIODS, i ∈ NODES, x ∈ THERMAL_1H; t ≥ 2],
+        FOR_RAMPING_1H = 2:length(PERIODS)
+        @constraint(model, Ramp_1h[t ∈ FOR_RAMPING_1H, i ∈ NODES, x ∈ THERMAL_1H],
             generation_on[t, i, x] ≤ 
             ( existing_generation[i, x] + generation_investment[i, x] ) - generation_spin[t-1, i, x]
         )
 
-        @constraint(model, Ramp_2h[t ∈ PERIODS, i ∈ NODES, x ∈ THERMAL_2H; t ≥ 3],
+        FOR_RAMPING_2H = 3:length(PERIODS)
+        @constraint(model, Ramp_2h[t ∈ FOR_RAMPING_2H, i ∈ NODES, x ∈ THERMAL_2H],
             generation_on[t, i, x] ≤ 
             ( existing_generation[i, x] + generation_investment[i, x] ) - generation_spin[t-2, i, x]
         )
@@ -708,7 +723,8 @@ current constraints:
         #     ( existing_generation[i, x] + generation_investment[i, x] ) - generation_spin[i, x, t-8]
         # )
 
-        @constraint(model, Ramp_12h[t ∈ PERIODS, i ∈ NODES, x ∈ THERMAL_12H; t ≥ 13],
+        FOR_RAMPING_12H = 13:length(PERIODS)
+        @constraint(model, Ramp_12h[t ∈ FOR_RAMPING_12H, i ∈ NODES, x ∈ THERMAL_12H],
             generation_on[t, i, x] ≤ 
             ( existing_generation[i, x] + generation_investment[i, x] ) - generation_spin[t-12, i, x]
         )

@@ -31,28 +31,29 @@ mkpath("modelinput")                                            # input folder, 
 mkpath("results")                                               # results folder
 const input_dir::String = joinpath(current_dir, "modelinput")
 const results_dir::String = joinpath(current_dir, "results")
-const options::ModelOptions = ModelOptions(run=:trial, FlexLim=:yes, EV=:yes)          # decided as global for now so that can be called in functions
+const options::ModelOptions = ModelOptions(run=:trial, FlexLim=:yes, EV=:no)          # decided as global for now so that can be called in functions
 if options.EV == :yes
     const EV::EVOptions = EVOptions()          # decided as global for now so that can be called in functions
 end
 
 @time m = run_model(:copt);
 
+nothing
 
-(; model, sets, vars) = m
+# (; model, sets, vars) = m
 
-@time results = query_solutions(
-    model,
-    sets,
-    vars
-);
+# @time results = query_solutions(
+#     model,
+#     sets,
+#     vars
+# );
 
 
-vgr_gen_inv = vgr_investment(results.Generation_Investment)
-vgr_sto_inv = vgr_investment(results.Storage_Investment)
+# vgr_gen_inv = vgr_investment(results.Generation_Investment)
+# vgr_sto_inv = vgr_investment(results.Storage_Investment)
 
-a = basic_barchart(vgr_gen_inv)
-b = basic_barchart(vgr_sto_inv)
+# a = basic_barchart(vgr_gen_inv)
+# b = basic_barchart(vgr_sto_inv)
 
 # Plots.savefig(a, "gen_1d.png")
 # Plots.savefig(b, "sto_1d.png")
