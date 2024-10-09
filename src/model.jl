@@ -63,7 +63,7 @@ Return:
     println("---------------------------------------------")
     start_const = time()
 
-    @time gen_constraints(model, sets, params, vars, grid_infra, profiles)
+    # @time gen_constraints(model, sets, params, vars, grid_infra, profiles)
     if options.FlexLim == :yes
         @time flex_lim_constraints(model, sets, params, vars, grid_infra, profiles)
     end
@@ -77,7 +77,7 @@ Return:
     println("Time needed to define constraints = $(time_consts / 60) mins")
     println("---------------------------------------------")
 
-    #------------------------------------------------------------------------------=#    
+    # ------------------------------------------------------------------------------=#    
 
     println("---------------------------------------------")
     println("Start Solving")
@@ -113,7 +113,8 @@ Return:
             time_solve
     )
 
-    model_struct = ModelStruct(model, sets, params, vars, times)
+    # model_struct = ModelStruct(model, sets, params, vars, times)
+    model_struct = (; model, sets, params, vars, times)
     
     return model_struct
 

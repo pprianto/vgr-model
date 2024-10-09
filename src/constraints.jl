@@ -1,8 +1,11 @@
 function cost_constraints(
     model::Model,
-    sets::ModelSets,
-    params::ModelParameters,
-    vars::ModelVariables,
+    # sets::ModelSets,
+    # params::ModelParameters,
+    sets::NamedTuple,
+    params::NamedTuple,
+    # vars::ModelVariables,
+    vars::NamedTuple,
     grid_infra::GridInfrastructures,
     profiles::Profiles
 )
@@ -285,9 +288,12 @@ end     # end cost_constraints
 
 function gen_constraints(
     model::Model,
-    sets::ModelSets,
-    params::ModelParameters,
-    vars::ModelVariables,
+    # sets::ModelSets,
+    # params::ModelParameters,
+    sets::NamedTuple,
+    params::NamedTuple,
+    # vars::ModelVariables,
+    vars::NamedTuple,
     grid_infra::GridInfrastructures,
     profiles::Profiles
 )
@@ -599,9 +605,12 @@ end     # end gen_constraints
 
 function flex_lim_constraints(
     model::Model,
-    sets::ModelSets,
-    params::ModelParameters,
-    vars::ModelVariables,
+    # sets::ModelSets,
+    # params::ModelParameters,
+    sets::NamedTuple,
+    params::NamedTuple,
+    # vars::ModelVariables,
+    vars::NamedTuple,
     grid_infra::GridInfrastructures,
     profiles::Profiles
 )
@@ -735,9 +744,12 @@ end     # end flex_lim
 
 function sto_constraints(
     model::Model,
-    sets::ModelSets,
-    params::ModelParameters,
-    vars::ModelVariables,
+    # sets::ModelSets,
+    # params::ModelParameters,
+    sets::NamedTuple,
+    params::NamedTuple,
+    # vars::ModelVariables,
+    vars::NamedTuple,
     grid_infra::GridInfrastructures,
     profiles::Profiles
 )
@@ -829,9 +841,12 @@ end     # end sto_constraints
 
 function enbal_constraints(
     model::Model,
-    sets::ModelSets,
-    params::ModelParameters,
-    vars::ModelVariables,
+    # sets::ModelSets,
+    # params::ModelParameters,
+    sets::NamedTuple,
+    params::NamedTuple,
+    # vars::ModelVariables,
+    vars::NamedTuple,
     grid_infra::GridInfrastructures,
     profiles::Profiles
 )
@@ -992,9 +1007,12 @@ end     # end enbal_constraints
 
 function power_flow_constraints(
     model::Model,
-    sets::ModelSets,
-    params::ModelParameters,
-    vars::ModelVariables,
+    # sets::ModelSets,
+    # params::ModelParameters,
+    sets::NamedTuple,
+    params::NamedTuple,
+    # vars::ModelVariables,
+    vars::NamedTuple,
     grid_infra::GridInfrastructures,
     profiles::Profiles
 )
