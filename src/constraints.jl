@@ -1,14 +1,14 @@
 function cost_constraints(
     model::Model,
-    # sets::ModelSets,
-    # params::ModelParameters,
     sets::NamedTuple,
     params::NamedTuple,
-    # vars::ModelVariables,
     vars::NamedTuple,
     grid_infra::GridInfrastructures,
-    # profiles::Profiles
     profiles::NamedTuple
+    # sets::ModelSets,
+    # params::ModelParameters,
+    # vars::ModelVariables,
+    # profiles::Profiles
 )
 
 #=------------------------------------------------------------------------------
@@ -68,8 +68,8 @@ current constraints:
             Heatdemand_data, 
             H2demand_data, 
             # Discount_rate,
-            Gen_cos_ϕ, 
-            Gen_sin_ϕ, 
+            # Gen_cos_ϕ, 
+            # Gen_sin_ϕ, 
             Demand_cos_ϕ, 
             Demand_sin_ϕ, 
             Lines_props = params
@@ -210,9 +210,9 @@ current constraints:
         exp_imp_costs ≥
         # export/import from transmission system
         sum( 
-            sum(i ∈ SE3_TRANS_NODES ? import_export[t, i] * SE3_price[t] : 0 for i ∈ NODES) +
-            sum(i ∈ NO1_TRANS_NODES ? import_export[t, i] * NO1_price[t] : 0 for i ∈ NODES) +
-            sum(i ∈ DK1_TRANS_NODES ? import_export[t, i] * DK1_price[t] : 0 for i ∈ NODES) 
+            sum(import_export[t, i] * SE3_price[t] for i ∈ SE3_TRANS_NODES) +
+            sum(import_export[t, i] * NO1_price[t] for i ∈ NO1_TRANS_NODES) +
+            sum(import_export[t, i] * DK1_price[t] for i ∈ DK1_TRANS_NODES) 
         for t ∈ PERIODS)
     )
 
@@ -289,15 +289,15 @@ end     # end cost_constraints
 
 function gen_constraints(
     model::Model,
-    # sets::ModelSets,
-    # params::ModelParameters,
     sets::NamedTuple,
     params::NamedTuple,
-    # vars::ModelVariables,
     vars::NamedTuple,
     grid_infra::GridInfrastructures,
-    # profiles::Profiles
     profiles::NamedTuple
+    # sets::ModelSets,
+    # params::ModelParameters,
+    # vars::ModelVariables,
+    # profiles::Profiles
 )
 
 #=------------------------------------------------------------------------------
@@ -328,9 +328,9 @@ current constraints:
             FLEX_TH = sets
     
     @unpack Gentech_data, 
-            Stotech_data, 
-            Gen_cos_ϕ, 
-            Gen_sin_ϕ = params
+            Stotech_data = params
+            # Gen_cos_ϕ, 
+            # Gen_sin_ϕ = params
 
     ## Variables
 
@@ -373,16 +373,6 @@ current constraints:
     end
 
     # define the lower bounds
-    # set 0 as default value if no values are assigned
-    # for node ∈ NODES 
-    #     for tech ∈ GEN_TECHS
-    #         set_lower_bound(
-    #             existing_generation[node, tech], 
-    #             get(capacity_lower_bounds, (node, tech), 0.0)
-    #             )
-    #     end
-    # end
-
     # since it is existing, set as fixed
     for node ∈ NODES 
         for tech ∈ GEN_TECHS
@@ -415,7 +405,6 @@ current constraints:
     # Nodes not in coastal municipalities not eligible for offshore wind farms (WOFF)
     # Seawater Heat Pumps (HPSW) could only be invested in coastal area
     # does not make sense to buy sea water and transport it
-    
     # define subset not coastal node
     NOT_COAST = setdiff(NODES, COAST_NODES)
     for t ∈ PERIODS
@@ -562,22 +551,15 @@ current constraints:
     
     if options.FlexLim == :yes
         # subset of not so general gen tech
-        NOT_GENERAL_GEN_TECHS = [WIND; PV; FLEX_TH]
+        NOT_GENERAL_GEN_TECHS = setdiff(GEN_TECHS, [WIND; PV; FLEX_TH])
         @constraint(model, Active_Generation_Limit_up[t ∈ PERIODS, i ∈ NODES, x ∈ NOT_GENERAL_GEN_TECHS],
             active_generation[t, i, x] ≤ existing_generation[i, x] + generation_investment[i, x])
     else
         # subset of not so general gen tech
-        NOT_GENERAL_GEN_TECHS = [WIND; PV]
+        NOT_GENERAL_GEN_TECHS = setdiff(GEN_TECHS, [WIND; PV])
         @constraint(model, Active_Generation_Limit_up[t ∈ PERIODS, i ∈ NODES, x ∈ NOT_GENERAL_GEN_TECHS],
         active_generation[t, i, x] ≤ existing_generation[i, x] + generation_investment[i, x])
     end  
-
-    # # active power generation
-    # # commented because generation can opt not to generate
-    # # perhaps any must run unit?
-    # Active_Generation_Limit_lo[i ∈ NODES, x ∈ GEN_TECHS, t ∈ PERIODS; x ∉ [WIND, PV, FLEX_TH]],
-    #     existing_generation[i, x] ≤ active_generation[t, i, x]
-
 
     # Bounds of reactive generation
     # according to SvK requirement for generators
@@ -607,15 +589,15 @@ end     # end gen_constraints
 
 function flex_lim_constraints(
     model::Model,
-    # sets::ModelSets,
-    # params::ModelParameters,
     sets::NamedTuple,
     params::NamedTuple,
-    # vars::ModelVariables,
     vars::NamedTuple,
     grid_infra::GridInfrastructures,
-    # profiles::Profiles
     profiles::NamedTuple
+    # sets::ModelSets,
+    # params::ModelParameters,
+    # vars::ModelVariables,
+    # profiles::Profiles
 )
 
 #=------------------------------------------------------------------------------
@@ -747,15 +729,15 @@ end     # end flex_lim
 
 function sto_constraints(
     model::Model,
-    # sets::ModelSets,
-    # params::ModelParameters,
     sets::NamedTuple,
     params::NamedTuple,
-    # vars::ModelVariables,
     vars::NamedTuple,
     grid_infra::GridInfrastructures,
-    # profiles::Profiles
     profiles::NamedTuple
+    # sets::ModelSets,
+    # params::ModelParameters,
+    # vars::ModelVariables,
+    # profiles::Profiles
 )
 
 #=------------------------------------------------------------------------------
@@ -845,15 +827,15 @@ end     # end sto_constraints
 
 function enbal_constraints(
     model::Model,
-    # sets::ModelSets,
-    # params::ModelParameters,
     sets::NamedTuple,
     params::NamedTuple,
-    # vars::ModelVariables,
     vars::NamedTuple,
     grid_infra::GridInfrastructures,
-    # profiles::Profiles
     profiles::NamedTuple
+    # sets::ModelSets,
+    # params::ModelParameters,
+    # vars::ModelVariables,
+    # profiles::Profiles
 )
 
 #=------------------------------------------------------------------------------
@@ -925,16 +907,18 @@ current constraints:
     println("---------------------------------------------")
 
     # Electricity nodal balance
-    for t ∈ PERIODS
-        for node ∈ NODES
-
-            # define electricity flow  from lines coming in/out of nodes
-            # enter considered as generation/supply, vice versa
-            # p denotes active power, q reactive power
-            p_enter = sum(active_flow[t, line] for (idx, line) ∈ enumerate(LINES) if NODE_TO[idx] == node; init=0)
-            p_exit = sum(active_flow[t, line] for (idx, line) ∈ enumerate(LINES) if NODE_FROM[idx] == node; init=0)
-            q_enter = sum(reactive_flow[t, line] for (idx, line) ∈ enumerate(LINES) if NODE_TO[idx] == node; init=0)
-            q_exit = sum(reactive_flow[t, line] for (idx, line) ∈ enumerate(LINES) if NODE_FROM[idx] == node; init=0)
+    # define electricity flow  from lines coming in/out of nodes
+    # enter considered as generation/supply, vice versa
+    # p denotes active power, q reactive power
+    for node ∈ NODES
+        NODE_TO_nodes = [line for (idx, line) ∈ enumerate(LINES) if NODE_TO[idx] == node]
+        NODE_FROM_nodes = [line for (idx, line) ∈ enumerate(LINES) if NODE_FROM[idx] == node]
+        is_transmission_node = node in TRANSMISSION_NODES
+        for t ∈ PERIODS
+            p_enter = sum(active_flow[t, line] for line ∈ NODE_TO_nodes; init=0)
+            p_exit = sum(active_flow[t, line] for line ∈ NODE_FROM_nodes; init=0)
+            q_enter = sum(reactive_flow[t, line] for line ∈ NODE_TO_nodes; init=0)
+            q_exit = sum(reactive_flow[t, line] for line ∈ NODE_FROM_nodes; init=0)
 
             # EQ (31) #
             # active power nodal balance
@@ -945,13 +929,13 @@ current constraints:
                 sum(active_generation[t, node, x] / Gentech_data[x].Efficiency for x ∈ EC) +     # for electrolyser / H2 demand
                 sum(storage_charge[t, node, s] for s ∈ EL_STO) +                                 # charge battery
                 sum(storage_charge[t, node, s] * 0.02 for s ∈ H2_STO) +                          # charge  h2 storage compressor, 2% of storage
-                (node in TRANSMISSION_NODES ? export_to[t, node] : 0) + 
+                (is_transmission_node ? export_to[t, node] : 0) + 
                 p_exit ≤                                                                         # el flow to other nodes
                 sum(active_generation[t, node, x] for x ∈ EL_GEN) +                              # el generation (active)
                 sum(storage_discharge[t, node, s] for s ∈ EL_STO) +                              # battery discharge
                 sum(active_generation[t, node, x] for x ∈ FC) +                                  # this applies for Fuel Cell (H2 -> EL)
                 p_enter +                                                                        # el flow to this node
-                (node in TRANSMISSION_NODES ? import_from[t, node] : 0)                        # import/export
+                (is_transmission_node ? import_from[t, node] : 0)                        # import/export
             )
             
             # EQ (32) #
@@ -1013,15 +997,15 @@ end     # end enbal_constraints
 
 function power_flow_constraints(
     model::Model,
-    # sets::ModelSets,
-    # params::ModelParameters,
     sets::NamedTuple,
     params::NamedTuple,
-    # vars::ModelVariables,
     vars::NamedTuple,
     grid_infra::GridInfrastructures,
-    # profiles::Profiles
     profiles::NamedTuple
+    # sets::ModelSets,
+    # params::ModelParameters,
+    # vars::ModelVariables,
+    # profiles::Profiles
 )
 
 #=------------------------------------------------------------------------------

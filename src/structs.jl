@@ -79,8 +79,8 @@ struct ModelParameters # Parameters
     Heatdemand_data     ::DataFrame
     H2demand_data       ::DataFrame
     # Discount_rate       ::Float64
-    Gen_cos_ϕ           ::Vector{Float64}
-    Gen_sin_ϕ           ::Vector{Float64}
+    # Gen_cos_ϕ           ::Vector{Float64}
+    # Gen_sin_ϕ           ::Vector{Float64}
     Demand_cos_ϕ        ::Float64
     Demand_sin_ϕ        ::Float64
     Lines_props         ::Dict{}

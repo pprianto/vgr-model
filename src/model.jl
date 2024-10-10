@@ -144,7 +144,7 @@ function read_input_data(
     heat_demand_df = read_file(joinpath(input_dir, "heat_nodal_demand.csv"))
     h2_demand_df = read_file(joinpath(input_dir, "h2_nodal_demand.csv"))
 
-    # RE profile
+    # RE profiles
     PV_fix_profile = read_file(joinpath(input_dir, "nodal_profile_pv_fixed_$(options.profile_year).csv"))          # fixed axis pv
     PV_opt_profile = read_file(joinpath(input_dir, "nodal_profile_pv_double_axis_$(options.profile_year).csv"))    # opt tracking pv
     WT_on_profile = read_file(joinpath(input_dir, "nodal_profile_onshore_wind_$(options.profile_year).csv"))       # onshore wind
@@ -156,21 +156,13 @@ function read_input_data(
     WTon = df_to_axisarrays(WT_on_profile)       # onshore wind
     WToff = df_to_axisarrays(WT_off_profile)     # offshore wind
 
-    # collections of input data in NamedTuple
-    # price = (; SE3=Array(elpris_df.SE3), NO1=Array(elpris_df.NO1), DK1=Array(elpris_df.DK1))
-    # grid_infra = (; subs=substations_df, lines=lines_df, pp=pp_df)
-    # tech_props = (; gen=gen_tech_df, sto=sto_tech_df)
-    # demand = (; el=el_demand_df, heat=heat_demand_df, h2=h2_demand_df)
-    # profiles = (; PVfix=PV_fix_profile, PVopt=PV_opt_profile, WTon=WT_on_profile, WToff=WT_off_profile)
-
-    # collections of input data in Struct
+    # collections of input data for return
     price = Prices(Array(elpris_df.SE3), Array(elpris_df.NO1), Array(elpris_df.DK1))
     grid_infra = GridInfrastructures(substations_df, lines_df, pp_df)
     tech_props = TechProps(gen_tech_df, sto_tech_df)
     demand = Demands(el_demand_df, heat_demand_df, h2_demand_df)
-    # profiles = Profiles(PV_fix_profile, PV_opt_profile, WT_on_profile, WT_off_profile)
     profiles = (; PVfix, PVopt, WTon, WToff)
-
+    
     return price, grid_infra, tech_props, demand, profiles
 
 end
@@ -183,7 +175,7 @@ function set_solver(model, solver::Symbol = :gurobi)
         # https://discourse.julialang.org/t/how-can-i-clear-solver-attributes-in-jump/57953
         optimizer = optimizer_with_attributes(
                 Gurobi.Optimizer,
-                "Threads" => 8,                     # shutoff for now, memory limit?
+                "Threads" => 24,                     # shutoff for now, memory limit?
                 "BarHomogeneous" => 1,              # 1: enabled
                 "Crossover" => 0,                  # 0: disabled
                 # "CrossoverBasis" => 0,                  # 0: disabled
@@ -335,6 +327,11 @@ Considerations for data structure:
         println("The system cost is $(cost) k€.")
 
         # Investment solutions
+        Generation_Capacity = DataFrame(NODE = NODES)
+        for tech ∈ GEN_TECHS
+            Generation_Capacity[!, Symbol(tech)] = [value((existing_generation[node, tech] + generation_investment[node, tech])) for node ∈ NODES]
+        end
+
         Generation_Investment = DataFrame(NODE = NODES)
         for tech ∈ GEN_TECHS
             Generation_Investment[!, Symbol(tech)] = [value(generation_investment[node, tech]) for node ∈ NODES]
@@ -345,6 +342,7 @@ Considerations for data structure:
             Storage_Investment[!, Symbol(tech)] = [value(storage_investment[node, tech]) for node ∈ NODES]
         end
 
+        Generation_Capacity = sum_capacities(Generation_Capacity)
         Generation_Investment = sum_capacities(Generation_Investment)
         Storage_Investment = sum_capacities(Storage_Investment)
 
@@ -425,7 +423,29 @@ Considerations for data structure:
             Reactive_Flow[!, Symbol(line)] = [value(reactive_flow[t, line]) for t ∈ PERIODS]
         end
 
+        # Save decision variables
+        # 2-dimensional variables in CSV
+        # 3-dimensional variables in JLD2
+
+        CSV.write(joinpath(results_dir, "Gen_Cap.csv"), Generation_Capacity)
+        CSV.write(joinpath(results_dir, "Gen_Inv.csv"), Generation_Investment)
+        CSV.write(joinpath(results_dir, "Sto_Inv.csv"), Storage_Investment)
+        CSV.write(joinpath(results_dir, "Sto_Inv.csv"), Export_to)
+        CSV.write(joinpath(results_dir, "Sto_Inv.csv"), Import_from)
+        CSV.write(joinpath(results_dir, "Sto_Inv.csv"), Export_Import)
+        CSV.write(joinpath(results_dir, "Sto_Inv.csv"), Nodal_Voltage)
+        CSV.write(joinpath(results_dir, "Sto_Inv.csv"), Nodal_Angle)
+        CSV.write(joinpath(results_dir, "Sto_Inv.csv"), Active_Flow)
+        CSV.write(joinpath(results_dir, "Sto_Inv.csv"), Reactive_Flow)
+
+        jldsave(joinpath(results_dir, "Gen_Disp.jld2"); Generation_Dispatch)
+        jldsave(joinpath(results_dir, "Gen_Disp.jld2"); Reactive_Dispatch)
+        jldsave(joinpath(results_dir, "Sto_Ch.jld2"); Storage_Charge)
+        jldsave(joinpath(results_dir, "Sto_Dch.jld2"); Storage_Discharge)
+        jldsave(joinpath(results_dir, "Sto_Lv.jld2"); Storage_Level)
+
         results =   (; 
+                    Generation_Capacity,
                     Generation_Investment, 
                     Storage_Investment,
                     Generation_Dispatch,
@@ -439,7 +459,7 @@ Considerations for data structure:
                     Nodal_Voltage,
                     Nodal_Angle,
                     Active_Flow,
-                    # combined_df
+                    Reactive_Flow
         )
         
         return results

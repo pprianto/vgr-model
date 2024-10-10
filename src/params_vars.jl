@@ -48,9 +48,9 @@ Return
     elseif options.run == :trial || :test
         # trial runs
         # adjust hour accordingly
-        Eldemand_data = demand.el[1:168, :]
-        Heatdemand_data = demand.heat[1:168, :]
-        H2demand_data = demand.h2[1:168, :]
+        Eldemand_data = demand.el[1:24, :]
+        Heatdemand_data = demand.heat[1:24, :]
+        H2demand_data = demand.h2[1:24, :]
 
     else
         @error "No run type named $run."
@@ -84,8 +84,8 @@ Return
     POWER FACTOR
     ------------------------------------------------------------------------------=#
     # Power factor assumptions
-    Gen_cos_ϕ = [0.8, 1]                            # assumed power factor operation bounds of generation
-    Gen_sin_ϕ = sqrt.(1 .- Gen_cos_ϕ.^2)
+    # Gen_cos_ϕ = [0.8, 1]                            # assumed power factor operation bounds of generation
+    # Gen_sin_ϕ = sqrt.(1 .- Gen_cos_ϕ.^2)
     Demand_cos_ϕ = 0.95                             # assumed load power factor
     Demand_sin_ϕ = sqrt.(1 .- Demand_cos_ϕ.^2)
     
@@ -118,7 +118,7 @@ Return
     if options.run == :full
         PERIODS = demand.el[!, :hour]               # time period set (hourly), full run
     elseif options.run == :trial || :test
-        PERIODS = demand.el[1:168, :hour]             # time period set (hourly), trial runs
+        PERIODS = demand.el[1:24, :hour]             # time period set (hourly), trial runs
     else
         @error "No run type named $run."
     end
@@ -284,59 +284,6 @@ Return
     Return
     ------------------------------------------------------------------------------=#
 
-    # sets =  ModelSets( 
-    #         Symbol.(NODES), 
-    #         Symbol.(TRANSMISSION_NODES),
-    #         Symbol.(SE3_TRANS_NODES),
-    #         Symbol.(NO1_TRANS_NODES),
-    #         Symbol.(DK1_TRANS_NODES),
-    #         Symbol.(COAST_NODES),
-    #         Symbol.(GBG),
-    #         Symbol.(GEN_TECHS), 
-    #         Symbol.(EL_GEN), 
-    #         Symbol.(HEAT_GEN), 
-    #         Symbol.(H2_GEN), 
-    #         Symbol.(STO_TECHS), 
-    #         Symbol.(EL_STO), 
-    #         Symbol.(HEAT_STO), 
-    #         Symbol.(H2_STO), 
-    #         Array(PERIODS), 
-    #         Symbol.(LINES), 
-    #         Symbol.(NODE_FROM), 
-    #         Symbol.(NODE_TO), 
-    #         Symbol.(CHP),
-    #         Symbol.(FC),
-    #         Symbol.(WIND),
-    #         Symbol.(PV),
-    #         Symbol.(HP),
-    #         Symbol.(BOILER),
-    #         Symbol.(EC),
-    #         Symbol.(FLEX_TH),
-    #         Symbol.(THERMAL_1H),
-    #         Symbol.(THERMAL_2H),
-    #         # Symbol.(THERMAL_8H),
-    #         Symbol.(THERMAL_12H)
-    # )
-
-    # params = ModelParameters( 
-    #          SE3_price,
-    #          NO1_price,
-    #          DK1_price, 
-    #          Gentech_data, 
-    #          Stotech_data, 
-    #          Eldemand_data,
-    #          Reactive_Demand, 
-    #          Heatdemand_data, 
-    #          H2demand_data, 
-    #         #  Discount_rate,
-    #          Gen_cos_ϕ, 
-    #          Gen_sin_ϕ, 
-    #          Demand_cos_ϕ, 
-    #          Demand_sin_ϕ, 
-    #          Lines_props,
-    #         #  Vnom 
-    # )
-
     sets =  (;  NODES = Symbol.(NODES), 
                 TRANSMISSION_NODES = Symbol.(TRANSMISSION_NODES),
                 SE3_TRANS_NODES = Symbol.(SE3_TRANS_NODES),
@@ -379,13 +326,13 @@ Return
                 Reactive_Demand, 
                 Heatdemand_data, 
                 H2demand_data, 
-                #  Discount_rate,
-                Gen_cos_ϕ, 
-                Gen_sin_ϕ, 
+                # Discount_rate,
+                # Gen_cos_ϕ, 
+                # Gen_sin_ϕ, 
                 Demand_cos_ϕ, 
                 Demand_sin_ϕ, 
                 Lines_props,
-                #  Vnom 
+                # Vnom 
     )
 
     return  sets, params
@@ -576,122 +523,6 @@ current variables:
     #=------------------------------------------------------------------------------
     Return
     ------------------------------------------------------------------------------=#
-
-    # if options.FlexLim == :yes && options.EV == :yes
-
-    #     return  ModelVariables( 
-    #             total_cost,
-    #             capex,
-    #             fix_om,
-    #             fuel_cost,
-    #             var_om,
-    #             start_part_costs,
-    #             exp_imp_costs,
-    #             tax_cost,
-    #             existing_generation,
-    #             generation_investment,
-    #             storage_investment,
-    #             active_generation,
-    #             reactive_generation,
-    #             generation_spin,
-    #             generation_on,
-    #             gen_startup_cost,
-    #             gen_partload_cost,
-    #             gen_startup_CO2,
-    #             gen_partload_CO2,
-    #             storage_charge,
-    #             storage_discharge,
-    #             storage_level,
-    #             nodal_voltage,
-    #             nodal_angle,
-    #             import_export,
-    #             export_to,
-    #             import_from,
-    #             active_flow,
-    #             reactive_flow,
-    #             pev_charging_slow,       
-    #             pev_discharge_net,       
-    #             pev_storage,             
-    #             pev_need,                
-    #     )
-
-    # elseif options.FlexLim == :yes && options.EV == :no
-
-    #     return  ModelVariables( 
-    #             total_cost,
-    #             capex,
-    #             fix_om,
-    #             fuel_cost,
-    #             var_om,
-    #             start_part_costs,
-    #             exp_imp_costs,
-    #             tax_cost,
-    #             existing_generation,
-    #             generation_investment,
-    #             storage_investment,
-    #             active_generation,
-    #             reactive_generation,
-    #             generation_spin,
-    #             generation_on,
-    #             gen_startup_cost,
-    #             gen_partload_cost,
-    #             gen_startup_CO2,
-    #             gen_partload_CO2,
-    #             storage_charge,
-    #             storage_discharge,
-    #             storage_level,
-    #             nodal_voltage,
-    #             nodal_angle,
-    #             import_export,
-    #             export_to,
-    #             import_from,
-    #             active_flow,
-    #             reactive_flow,
-    #             nothing,       
-    #             nothing,       
-    #             nothing,             
-    #             nothing,                
-    #     )
-
-    # else
-
-    #     return  ModelVariables( 
-    #             total_cost,
-    #             capex,
-    #             fix_om,
-    #             fuel_cost,
-    #             var_om,
-    #             start_part_costs,
-    #             exp_imp_costs,
-    #             tax_cost,
-    #             existing_generation,
-    #             generation_investment,
-    #             storage_investment,
-    #             active_generation,
-    #             reactive_generation,
-    #             nothing,
-    #             nothing,
-    #             nothing,
-    #             nothing,
-    #             nothing,
-    #             nothing,
-    #             storage_charge,
-    #             storage_discharge,
-    #             storage_level,
-    #             nodal_voltage,
-    #             nodal_angle,
-    #             import_export,
-    #             export_to,
-    #             import_from,
-    #             active_flow,
-    #             reactive_flow,
-    #             nothing,       
-    #             nothing,       
-    #             nothing,             
-    #             nothing,                
-    #     )
-
-    # end
 
     if options.FlexLim == :yes && options.EV == :yes
 
