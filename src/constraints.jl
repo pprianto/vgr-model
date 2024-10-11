@@ -474,7 +474,7 @@ current constraints:
     
     # Minimum investments of offshore wind power is 1400 MW - Poseidon project
     # Poseidon omfattar 5,5 TWh och en effekt om 1 400 MW och skulle kunna vara på plats tidigast 2030.
-    @constraint(model,
+    @constraint(model, Min_WOFF_inv,
         sum( existing_generation[i, :WOFF] + generation_investment[i, :WOFF] for i ∈ STE_LYS ) ≥ 1400
     )
 
@@ -488,7 +488,7 @@ current constraints:
 
     # Maximum investments of onshore wind power is 1700 MW
     # Potentiell installerad effekt 2030 antas vara närmare 1 770 MW varav 1348 MW var installerad redan 2023. 
-    @constraint(model,
+    @constraint(model, Max_WON_inv,
         sum( existing_generation[i, :WON] + generation_investment[i, :WON] for i ∈ NODES ) ≤ 1700
     )
 
@@ -497,7 +497,7 @@ current constraints:
     # Enligt Energimyndighetens statistik hade Västra Götalands län 2023 ca 620 MW installerad effekt från nätanslutna solcellsanläggningar,
     # Potentialen för elproduktion från solkraft är dock stor och det finns anmälningar och ansökningar hos 
     # Länsstyrelsen i Västra Götaland om byggnation av ca 1100 MW solel från både små och stora markinstallationer.
-    @constraint(model,
+    @constraint(model, Min_PV_inv,
         sum( existing_generation[i, :PVUTIL] + generation_investment[i, :PVUTIL] for i ∈ NODES ) ≥ 1700
     )
 
@@ -505,7 +505,7 @@ current constraints:
     # 2 TWH in the entire VGR
     # Elproduktionen från vattenkraften i Västra Götaland har de senaste åren varierat mellan 1,4–2,3 TWh/år 
     # och den största produktionen sker i Trollhättan.
-    @constraint(model,
+    @constraint(model, Max_HYD_gen,
         sum( 
             sum( active_generation[t, i, :HYD] for i ∈ NODES )
             for t ∈ PERIODS) ≤ 2e6

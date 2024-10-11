@@ -19,7 +19,7 @@ Taking the following:
 4. Constraints
 
 Return:
-1. Model in .mps file
+1. Model in NamedTuple
 
 ------------------------------------------------------------------------------=#
 
@@ -88,15 +88,6 @@ Return:
 
     optimize!(model)
 
-    # if model == Model(Gurobi.Optimizer)
-    #     compute_conflict!(model)
-
-    #     if get_attribute(model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
-    #         iis_model, _ = copy_conflict(model)
-    #         print(iis_model)
-    #     end
-    # end
-    
     time_solve = time()-start_solve  
     println("---------------------------------------------")
     println("Time needed to solve = $(time_solve / 60) mins")
@@ -151,10 +142,10 @@ function read_input_data(
     WT_off_profile = read_file(joinpath(input_dir, "nodal_profile_offshore_wind_$(options.profile_year).csv"))     # offshore wind
 
     # RE profile in axis arrays
-    PVfix = df_to_axisarrays(PV_fix_profile)          # fixed axis pv
+    PVfix = df_to_axisarrays(PV_fix_profile)    # fixed axis pv
     PVopt = df_to_axisarrays(PV_opt_profile)    # opt tracking pv
-    WTon = df_to_axisarrays(WT_on_profile)       # onshore wind
-    WToff = df_to_axisarrays(WT_off_profile)     # offshore wind
+    WTon = df_to_axisarrays(WT_on_profile)      # onshore wind
+    WToff = df_to_axisarrays(WT_off_profile)    # offshore wind
 
     # collections of input data for return
     price = Prices(Array(elpris_df.SE3), Array(elpris_df.NO1), Array(elpris_df.DK1))
@@ -292,7 +283,15 @@ Considerations for data structure:
 
     ## Variables
 
-    @unpack existing_generation,
+    @unpack total_cost,
+            capex,
+            fix_om,
+            fuel_cost,
+            var_om,
+            start_part_costs,
+            exp_imp_costs,
+            tax_cost,
+            existing_generation,
             generation_investment, 
             storage_investment, 
             active_generation, 
@@ -325,6 +324,18 @@ Considerations for data structure:
         
         cost = objective_value(model)
         println("The system cost is $(cost) k€.")
+
+        # Cost variables
+        Costs = DataFrame(
+            :System_cost => value(total_cost),
+            :CAPEX_cost => value(capex),
+            :Fix_OM_cost => value(fix_om),
+            :Fuel_cost => value(fuel_cost),
+            :Var_OM_cost => value(var_om),
+            :Start_Part_cost => value(start_part_costs),
+            :Export_Import_cost => value(exp_imp_costs),
+            :Taxes_cost => value(tax_cost)
+        )
 
         # Investment solutions
         Generation_Capacity = DataFrame(NODE = NODES)
@@ -423,28 +434,10 @@ Considerations for data structure:
             Reactive_Flow[!, Symbol(line)] = [value(reactive_flow[t, line]) for t ∈ PERIODS]
         end
 
-        # Save decision variables
-        # 2-dimensional variables in CSV
-        # 3-dimensional variables in JLD2
 
-        CSV.write(joinpath(results_dir, "Gen_Cap.csv"), Generation_Capacity)
-        CSV.write(joinpath(results_dir, "Gen_Inv.csv"), Generation_Investment)
-        CSV.write(joinpath(results_dir, "Sto_Inv.csv"), Storage_Investment)
-        CSV.write(joinpath(results_dir, "Sto_Inv.csv"), Export_to)
-        CSV.write(joinpath(results_dir, "Sto_Inv.csv"), Import_from)
-        CSV.write(joinpath(results_dir, "Sto_Inv.csv"), Export_Import)
-        CSV.write(joinpath(results_dir, "Sto_Inv.csv"), Nodal_Voltage)
-        CSV.write(joinpath(results_dir, "Sto_Inv.csv"), Nodal_Angle)
-        CSV.write(joinpath(results_dir, "Sto_Inv.csv"), Active_Flow)
-        CSV.write(joinpath(results_dir, "Sto_Inv.csv"), Reactive_Flow)
-
-        jldsave(joinpath(results_dir, "Gen_Disp.jld2"); Generation_Dispatch)
-        jldsave(joinpath(results_dir, "Gen_Disp.jld2"); Reactive_Dispatch)
-        jldsave(joinpath(results_dir, "Sto_Ch.jld2"); Storage_Charge)
-        jldsave(joinpath(results_dir, "Sto_Dch.jld2"); Storage_Discharge)
-        jldsave(joinpath(results_dir, "Sto_Lv.jld2"); Storage_Level)
 
         results =   (; 
+                    Costs,
                     Generation_Capacity,
                     Generation_Investment, 
                     Storage_Investment,
@@ -473,3 +466,58 @@ Considerations for data structure:
 
 end
 
+
+function save_variables(
+    results::NamedTuple
+)
+#=------------------------------------------------------------------------------
+----------------------------- SAVE VARIABLES -----------------------------------
+
+Extract the optimum solutions
+and save into files
+so that can be post-processed further or in another computer
+
+Considerations for data structure:
+1. 2-dimensional variables in CSV
+2. 3-dimensional variables in JLD2
+
+------------------------------------------------------------------------------=#
+
+    (;  Costs,
+        Generation_Capacity,
+        Generation_Investment, 
+        Storage_Investment,
+        Generation_Dispatch,
+        Reactive_Dispatch,
+        Storage_Charge,
+        Storage_Discharge,
+        Storage_Level,
+        Export_to,
+        Import_from,
+        Export_Import,
+        Nodal_Voltage,
+        Nodal_Angle,
+        Active_Flow,
+        Reactive_Flow
+    ) = results
+
+    # Save decision variables
+    CSV.write(joinpath(results_dir, "Costs.csv"), Costs)                        # 1
+    CSV.write(joinpath(results_dir, "Gen_Cap.csv"), Generation_Capacity)
+    CSV.write(joinpath(results_dir, "Gen_Inv.csv"), Generation_Investment)
+    CSV.write(joinpath(results_dir, "Sto_Inv.csv"), Storage_Investment)
+    CSV.write(joinpath(results_dir, "Export.csv"), Export_to)
+    CSV.write(joinpath(results_dir, "Import.csv"), Import_from)
+    CSV.write(joinpath(results_dir, "Exp_Imp.csv"), Export_Import)
+    CSV.write(joinpath(results_dir, "VM_node.csv"), Nodal_Voltage)
+    CSV.write(joinpath(results_dir, "VA_node.csv"), Nodal_Angle)
+    CSV.write(joinpath(results_dir, "P_line.csv"), Active_Flow)
+    CSV.write(joinpath(results_dir, "Q_line.csv"), Reactive_Flow)
+
+    jldsave(joinpath(results_dir, "Gen_Disp.jld2"); Generation_Dispatch)
+    jldsave(joinpath(results_dir, "Q_Disp.jld2"); Reactive_Dispatch)
+    jldsave(joinpath(results_dir, "Sto_Ch.jld2"); Storage_Charge)
+    jldsave(joinpath(results_dir, "Sto_Dch.jld2"); Storage_Discharge)
+    jldsave(joinpath(results_dir, "Sto_Lv.jld2"); Storage_Level)                # 16
+
+end

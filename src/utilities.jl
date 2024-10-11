@@ -296,7 +296,7 @@ function sum_capacities(
     investment_df
 )
 
-    VGR_node = DataFrame(NODE = "VGR")
+    VGR_node = DataFrame(NODE = :VGR)
     total_inv = combine(investment_df, 
                             names(investment_df, Not(:NODE)) .=> sum .=> names(investment_df, Not(:NODE))
                             )
