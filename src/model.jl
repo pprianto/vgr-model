@@ -357,50 +357,74 @@ Considerations for data structure:
         Generation_Investment = sum_capacities(Generation_Investment)
         Storage_Investment = sum_capacities(Storage_Investment)
 
-        # Dispatch solutions
-        Generation_Dispatch = Dict{Symbol, DataFrame}()
-        Reactive_Dispatch = Dict{Symbol, DataFrame}()
-        Storage_Charge = Dict{Symbol, DataFrame}()
-        Storage_Discharge = Dict{Symbol, DataFrame}()
-        Storage_Level = Dict{Symbol, DataFrame}()
+        # # Dispatch solutions
+        # Generation_Dispatch = Dict{Symbol, DataFrame}()
+        # Reactive_Dispatch = Dict{Symbol, DataFrame}()
+        # Storage_Charge = Dict{Symbol, DataFrame}()
+        # Storage_Discharge = Dict{Symbol, DataFrame}()
+        # Storage_Level = Dict{Symbol, DataFrame}()
 
-        for node ∈ NODES
-            Generation_Dispatch[node] = DataFrame(
-                [value(active_generation[t, node, tech]) for t ∈ PERIODS, tech ∈ GEN_TECHS], 
-                GEN_TECHS
-            )
+        # for node ∈ NODES
+        #     Generation_Dispatch[node] = DataFrame(
+        #         [value(active_generation[t, node, tech]) for t ∈ PERIODS, tech ∈ GEN_TECHS], 
+        #         GEN_TECHS
+        #     )
 
-            Reactive_Dispatch[node] = DataFrame(
-                [value(reactive_generation[t, node, tech]) for t ∈ PERIODS, tech ∈ EL_GEN], 
-                EL_GEN
-            )
+        #     Reactive_Dispatch[node] = DataFrame(
+        #         [value(reactive_generation[t, node, tech]) for t ∈ PERIODS, tech ∈ EL_GEN], 
+        #         EL_GEN
+        #     )
 
-            Storage_Charge[node] = DataFrame(
-                [value(storage_charge[t, node, tech]) for t ∈ PERIODS, tech ∈ STO_TECHS], 
-                STO_TECHS
-            )
+        #     Storage_Charge[node] = DataFrame(
+        #         [value(storage_charge[t, node, tech]) for t ∈ PERIODS, tech ∈ STO_TECHS], 
+        #         STO_TECHS
+        #     )
 
-            Storage_Discharge[node] = DataFrame(
-                [value(storage_discharge[t, node, tech]) for t ∈ PERIODS, tech ∈ STO_TECHS], 
-                STO_TECHS
-            )
+        #     Storage_Discharge[node] = DataFrame(
+        #         [value(storage_discharge[t, node, tech]) for t ∈ PERIODS, tech ∈ STO_TECHS], 
+        #         STO_TECHS
+        #     )
 
-            Storage_Level[node] = DataFrame(
-                [value(storage_discharge[t, node, tech]) for t ∈ PERIODS, tech ∈ STO_TECHS], 
-                STO_TECHS
-            )
-        end
+        #     Storage_Level[node] = DataFrame(
+        #         [value(storage_level[t, node, tech]) for t ∈ PERIODS, tech ∈ STO_TECHS], 
+        #         STO_TECHS
+        #     )
+        # end
 
         # Long DataFrame format for dispatch
         # for consideration
         # to adjust accordingly
 
-        combined_df = DataFrame(Node=Symbol[], Tech=Symbol[], Period=Int[], Value=Float64[])
+        Generation_Dispatch = DataFrame(Node=Symbol[], Tech=Symbol[], Period=Int[], Dispatch=Float64[])
+        Reactive_Dispatch = DataFrame(Node=Symbol[], Tech=Symbol[], Period=Int[], Dispatch=Float64[])
+        Storage_Charge = DataFrame(Node=Symbol[], Tech=Symbol[], Period=Int[], Charge=Float64[])
+        Storage_Discharge = DataFrame(Node=Symbol[], Tech=Symbol[], Period=Int[], Discharge=Float64[])
+        Storage_Level = DataFrame(Node=Symbol[], Tech=Symbol[], Period=Int[], Level=Float64[])
 
-        for (node, df) in Generation_Dispatch
-            for (tech_idx, tech) in enumerate(GEN_TECHS)
-                for period in PERIODS
-                    push!(combined_df, (Node=node, Tech=tech, Period=period,Value=df[period, tech_idx]))
+
+        for node ∈ NODES
+            for tech in GEN_TECHS  
+                for time in PERIODS
+                    push!(Generation_Dispatch, (node, tech, time, value(active_generation[time, node, tech])))
+                end
+            end
+        end
+
+        for node ∈ NODES
+            for tech in EL_GEN  
+                for time in PERIODS
+                    push!(Reactive_Dispatch, (node, tech, time, value(reactive_generation[time, node, tech])))
+                end
+            end
+        end
+
+        for node ∈ NODES
+            for tech in STO_TECHS  
+                for time in PERIODS
+                    push!(Storage_Charge, (node, tech, time, value(storage_charge[time, node, tech])))
+                    push!(Storage_Discharge, (node, tech, time, value(storage_discharge[time, node, tech])))
+                    push!(Storage_Level, (node, tech, time, value(storage_level[time, node, tech])))
+
                 end
             end
         end

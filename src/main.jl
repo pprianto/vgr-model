@@ -31,7 +31,7 @@ mkpath("modelinput")                                            # input folder, 
 mkpath("results")                                               # results folder
 const input_dir::String = joinpath(current_dir, "modelinput")
 const results_dir::String = joinpath(current_dir, "results")
-const options::ModelOptions = ModelOptions(run=:full, FlexLim=:yes, EV=:no)          # decided as global for now so that can be called in functions
+const options::ModelOptions = ModelOptions(run=:trial, FlexLim=:yes, EV=:no)          # decided as global for now so that can be called in functions
 if options.EV == :yes
     const EV::EVOptions = EVOptions()          # decided as global for now so that can be called in functions
 end
