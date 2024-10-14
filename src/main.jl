@@ -10,9 +10,32 @@ include the following steps:
 
 Return:
     - Dataframe of results for ...
+
+
+Example of run:
+
+@time m = run_model(:copt);
+
+@time results = query_solutions(
+    m.model,
+    m.sets,
+    m.vars
+);
+
+vgr_gen_cap = vgr_investment(results.Generation_Capacity)
+vgr_gen_inv = vgr_investment(results.Generation_Investment)
+vgr_sto_inv = vgr_investment(results.Storage_Investment)
+
+a = basic_barchart(vgr_gen_cap)
+b = basic_barchart(vgr_gen_inv)
+c = basic_barchart(vgr_sto_inv)
+
+Plots.savefig(a, "gen_1d.png")
+Plots.savefig(b, "sto_1d.png")
+
 ------------------------------------------------------------------------------=#
 
-using DataFrames, CSV, XLSX, UnPack, Printf, JLD2
+using DataFrames, CSV, XLSX, Printf, JLD2
 using JuMP, HiGHS, Ipopt, Gurobi, COPT
 import AxisArrays, SparseArrays, LinearAlgebra
 import Plots, CairoMakie
@@ -31,30 +54,11 @@ mkpath("modelinput")                                            # input folder, 
 mkpath("results")                                               # results folder
 const input_dir::String = joinpath(current_dir, "modelinput")
 const results_dir::String = joinpath(current_dir, "results")
-const options::ModelOptions = ModelOptions(run=:trial, FlexLim=:yes, EV=:no)          # decided as global for now so that can be called in functions
+const options::ModelOptions = ModelOptions(run=:full, FlexLim=:yes, EV=:no)          # decided as global for now so that can be called in functions
 if options.EV == :yes
     const EV::EVOptions = EVOptions()          # decided as global for now so that can be called in functions
 end
 
 nothing
 
-# @time m = run_model(:gurobi);
 
-# (; model, sets, vars) = m
-
-# @time results = query_solutions(
-#     model,
-#     sets,
-#     vars
-# );
-
-# vgr_gen_cap = vgr_investment(results.Generation_Capacity)
-# vgr_gen_inv = vgr_investment(results.Generation_Investment)
-# vgr_sto_inv = vgr_investment(results.Storage_Investment)
-
-# a = basic_barchart(vgr_gen_cap)
-# b = basic_barchart(vgr_gen_inv)
-# c = basic_barchart(vgr_sto_inv)
-
-# Plots.savefig(a, "gen_1d.png")
-# Plots.savefig(b, "sto_1d.png")

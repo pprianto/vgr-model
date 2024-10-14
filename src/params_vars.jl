@@ -100,9 +100,10 @@ Return
     prepped_lines = lines_props(grid_infra.lines)
     LINES_SETS, Lines_props = lines_prep(prepped_lines.lines_df)
 
-    @unpack LINES, 
-            NODE_FROM, 
-            NODE_TO = LINES_SETS
+    (;  LINES, 
+        NODE_FROM, 
+        NODE_TO
+    ) = LINES_SETS
 
     #=------------------------------------------------------------------------------
     MODEL SETS
@@ -134,52 +135,18 @@ Return
     # Stenungsund
     # Kungälv
     # Göteborg
-    COAST_NODES = [
-        :GBG1,     # 1
-        :GBG2,
-        :GBG3,
-        :GBG4,
-        :GBG5,
-        :GBG6,
-        :GBG7,
-        :GBG8,
-        :GBG9,
-        :GBG10,    # 10
-        :GBG11,
-        :GBG12,
-        :KUN1,
-        :KUN2,
-        :KUN3,
-        :KUN4,
-        :STE1,
-        :ORU1,
-        :ORU2,
-        :LYS1,     # 20
-        :LYS2,
-        :TAN1,
-        :TAN2,
-        :TAN3,
-        :TAN4,
-        :STR1,
-        :STR2,
-        :STR3,     # 28
-    ]
+
+    coast_municipalities = ["GBG"; "KUN"; "STE"; "ORU"; "LYS"; "TAN"; "STR"]
+    coast_subs_df = filter(row -> any(startswith(row.node_id, prefix) for prefix in coast_municipalities), grid_infra.subs)
+    
+    COAST_NODES = Symbol.(coast_subs_df.node_id |> Vector)
 
     # Pit Thermal Storage is not feasible in Gothenburg
-    GBG = [
-        :GBG1,     # 1
-        :GBG2,
-        :GBG3,
-        :GBG4,
-        :GBG5,
-        :GBG6,
-        :GBG7,
-        :GBG8,
-        :GBG9,
-        :GBG10,    # 10
-        :GBG11,
-        :GBG12,
-    ]
+
+    gothenburg = ["GBG"]
+    gbg_subs_df = filter(row -> any(startswith(row.node_id, prefix) for prefix in gothenburg), grid_infra.subs)
+    
+    GBG = Symbol.(gbg_subs_df.node_id |> Vector)
 
     #=------------------------------------------------------------------------------
     GENERATION TECHNOLOGY SUBSETS
@@ -363,18 +330,19 @@ current variables:
 ------------------------------------------------------------------------------=#
     ## Sets and parameters
 
-    @unpack NODES, 
-            TRANSMISSION_NODES,
-            GEN_TECHS, 
-            EL_GEN, 
-            # HEAT_GEN, 
-            # H2_GEN, 
-            STO_TECHS, 
-            PERIODS, 
-            LINES, 
-            FLEX_TH = sets
-    
-    @unpack Lines_props = params
+    (;  NODES, 
+        TRANSMISSION_NODES,
+        GEN_TECHS, 
+        EL_GEN, 
+        # HEAT_GEN, 
+        # H2_GEN, 
+        STO_TECHS, 
+        PERIODS, 
+        LINES, 
+        FLEX_TH
+    ) = sets
+        
+    (; Lines_props) = params
             # Vnom = params
 
     #=------------------------------------------------------------------------------
@@ -655,3 +623,4 @@ function lines_prep(
     return lines_sets, Lines_props
 
 end
+

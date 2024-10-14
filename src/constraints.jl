@@ -26,86 +26,46 @@ current constraints:
 ------------------------------------------------------------------------------=#
     ## Sets and parameters
 
-    @unpack NODES, 
-            TRANSMISSION_NODES,
-            SE3_TRANS_NODES,
-            NO1_TRANS_NODES,
-            DK1_TRANS_NODES,
-            COAST_NODES,
-            GBG,
-            GEN_TECHS, 
-            EL_GEN, 
-            HEAT_GEN, 
-            H2_GEN, 
-            STO_TECHS, 
-            EL_STO, 
-            HEAT_STO, 
-            H2_STO, 
-            PERIODS, 
-            LINES, 
-            NODE_FROM, 
-            NODE_TO, 
-            CHP,
-            FC,
-            WIND,
-            PV,
-            HP,
-            BOILER,
-            EC,
-            FLEX_TH,
-            THERMAL_1H,
-            THERMAL_2H,
-            # THERMAL_8H,
-            THERMAL_12H = sets
-    
-    @unpack SE3_price,
-            NO1_price,
-            DK1_price, 
-            Gentech_data, 
-            Stotech_data, 
-            Eldemand_data,
-            Reactive_Demand, 
-            Heatdemand_data, 
-            H2demand_data, 
-            # Discount_rate,
-            # Gen_cos_ϕ, 
-            # Gen_sin_ϕ, 
-            Demand_cos_ϕ, 
-            Demand_sin_ϕ, 
-            Lines_props = params
-            # Vnom = params
+    (;  NODES, 
+        SE3_TRANS_NODES,
+        NO1_TRANS_NODES,
+        DK1_TRANS_NODES,
+        GEN_TECHS, 
+        STO_TECHS, 
+        PERIODS, 
+        HP,
+        EC,
+        FLEX_TH,
+    ) = sets
+        
+    (;  SE3_price,
+        NO1_price,
+        DK1_price, 
+        Gentech_data, 
+        Stotech_data, 
+    ) = params
+        # Vnom = params
 
     ## Variables
 
-    @unpack total_cost,
-            capex,
-            fix_om,
-            fuel_cost,
-            var_om,
-            start_part_costs,
-            exp_imp_costs,
-            tax_cost,
-            existing_generation,
-            generation_investment,
-            storage_investment,
-            active_generation,
-            reactive_generation,
-            generation_spin,
-            generation_on,
-            gen_startup_cost,
-            gen_partload_cost,
-            gen_startup_CO2,
-            gen_partload_CO2,
-            storage_charge,
-            storage_discharge,
-            storage_level,
-            nodal_voltage,
-            nodal_angle,
-            import_export,
-            export_to,
-            import_from,
-            active_flow,
-            reactive_flow = vars
+    (;  total_cost,
+        capex,
+        fix_om,
+        fuel_cost,
+        var_om,
+        start_part_costs,
+        exp_imp_costs,
+        tax_cost,
+        generation_investment,
+        storage_investment,
+        active_generation,
+        gen_startup_cost,
+        gen_partload_cost,
+        gen_startup_CO2,
+        gen_partload_CO2,
+        storage_discharge,
+        import_export,
+    ) = vars
 
     #=------------------------------------------------------------------------------
     MODEL CONSTRAINTS
@@ -315,30 +275,32 @@ current constraints:
 ------------------------------------------------------------------------------=#
     ## Sets and parameters
 
-    @unpack NODES, 
-            COAST_NODES,
-            GBG,
-            GEN_TECHS,
-            EL_GEN, 
-            PERIODS, 
-            CHP,
-            FC,
-            WIND,
-            PV,
-            FLEX_TH = sets
-    
-    @unpack Gentech_data, 
-            Stotech_data = params
+    (;  NODES, 
+        COAST_NODES,
+        GBG,
+        GEN_TECHS,
+        EL_GEN, 
+        PERIODS, 
+        FC,
+        WIND,
+        PV,
+        FLEX_TH
+    ) = sets
+        
+    (;  Gentech_data, 
+        Stotech_data
+    ) = params
             # Gen_cos_ϕ, 
             # Gen_sin_ϕ = params
 
     ## Variables
 
-    @unpack existing_generation,
-            generation_investment,
-            storage_investment,
-            active_generation,
-            reactive_generation = vars
+    (;  existing_generation,
+        generation_investment,
+        storage_investment,
+        active_generation,
+        reactive_generation 
+    ) = vars
 
     #=------------------------------------------------------------------------------
     MODEL CONSTRAINTS
@@ -615,29 +577,29 @@ current constraints:
 ------------------------------------------------------------------------------=#
     ## Sets and parameters
 
-    @unpack NODES, 
-            GEN_TECHS,
-            PERIODS, 
-            FLEX_TH,
-            THERMAL_1H,
-            THERMAL_2H,
-            # THERMAL_8H,
-            THERMAL_12H = sets
-    
-    @unpack Gentech_data = params
+    (;  NODES, 
+        PERIODS, 
+        FLEX_TH,
+        THERMAL_1H,
+        THERMAL_2H,
+        # THERMAL_8H,
+        THERMAL_12H
+    ) = sets
+        
+    (; Gentech_data) = params
 
     ## Variables
 
-    @unpack existing_generation,
-            generation_investment,
-            storage_investment,
-            active_generation,
-            generation_spin,
-            generation_on,
-            gen_startup_cost,
-            gen_partload_cost,
-            gen_startup_CO2,
-            gen_partload_CO2 = vars
+    (;  existing_generation,
+        generation_investment,
+        active_generation,
+        generation_spin,
+        generation_on,
+        gen_startup_cost,
+        gen_partload_cost,
+        gen_startup_CO2,
+        gen_partload_CO2
+    ) = vars
 
     #=------------------------------------------------------------------------------
     MODEL CONSTRAINTS
@@ -755,22 +717,21 @@ current constraints:
 ------------------------------------------------------------------------------=#
     ## Sets and parameters
 
-    @unpack NODES, 
-            STO_TECHS, 
-            EL_STO, 
-            HEAT_STO, 
-            H2_STO, 
-            PERIODS = sets
-    
-    @unpack Stotech_data = params
+    (;  NODES, 
+        STO_TECHS, 
+        PERIODS
+    ) = sets
+        
+    (; Stotech_data) = params
             # Vnom = params
 
     ## Variables
 
-    @unpack storage_investment,
-            storage_charge,
-            storage_discharge,
-            storage_level = vars
+    (;  storage_investment,
+        storage_charge,
+        storage_discharge,
+        storage_level
+    ) = vars
 
     #=------------------------------------------------------------------------------
     MODEL CONSTRAINTS
@@ -853,47 +814,41 @@ current constraints:
 ------------------------------------------------------------------------------=#
     ## Sets and parameters
 
-    @unpack NODES, 
-            TRANSMISSION_NODES,
-            GEN_TECHS, 
-            EL_GEN, 
-            HEAT_GEN, 
-            H2_GEN, 
-            STO_TECHS, 
-            EL_STO, 
-            HEAT_STO, 
-            H2_STO, 
-            PERIODS, 
-            LINES, 
-            NODE_FROM, 
-            NODE_TO, 
-            CHP,
-            FC,
-            WIND,
-            PV,
-            HP,
-            BOILER,
-            EC = sets
-    
-    @unpack Gentech_data, 
-            Stotech_data, 
-            Eldemand_data,
-            Reactive_Demand, 
-            Heatdemand_data, 
-            H2demand_data = params
+    (;  NODES, 
+        TRANSMISSION_NODES,
+        EL_GEN, 
+        EL_STO, 
+        HEAT_STO, 
+        H2_STO, 
+        PERIODS, 
+        LINES, 
+        NODE_FROM, 
+        NODE_TO, 
+        CHP,
+        FC,
+        HP,
+        BOILER,
+        EC
+    ) = sets
+        
+    (;  Gentech_data, 
+        Eldemand_data,
+        Reactive_Demand, 
+        Heatdemand_data, 
+        H2demand_data
+    ) = params
 
     ## Variables
 
-    @unpack active_generation,
-            reactive_generation,
-            storage_charge,
-            storage_discharge,
-            storage_level,
-            import_export,
-            export_to,
-            import_from,
-            active_flow,
-            reactive_flow = vars
+    (;  active_generation,
+        reactive_generation,
+        storage_charge,
+        storage_discharge,
+        export_to,
+        import_from,
+        active_flow,
+        reactive_flow
+    ) = vars
 
     #=------------------------------------------------------------------------------
     MODEL CONSTRAINTS
@@ -1023,21 +978,22 @@ current constraints:
 ------------------------------------------------------------------------------=#
     ## Sets and parameters
 
-    @unpack NODES, 
-            PERIODS, 
-            LINES, 
-            NODE_FROM, 
-            NODE_TO = sets
-    
-    @unpack Lines_props = params
+    (;  PERIODS, 
+        LINES, 
+        NODE_FROM, 
+        NODE_TO
+    ) = sets
+        
+    (;  Lines_props) = params
             # Vnom = params
 
     ## Variables
 
-    @unpack nodal_voltage,
-            nodal_angle,
-            active_flow,
-            reactive_flow = vars
+    (;  nodal_voltage,
+        nodal_angle,
+        active_flow,
+        reactive_flow
+    ) = vars
 
     #=------------------------------------------------------------------------------
     MODEL CONSTRAINTS
