@@ -194,7 +194,7 @@ function set_solver(model, solver::Symbol = :gurobi)
                 # "BarHomogeneous" => 1,  # 0=no, 1=yes
                 # "BarOrder" => 1,       # -1=auto, 0=Approximate Minimum Degree, 1=Nested Dissection
                 # "BarStart" => 2,       # -1=auto, 0=Asimple, 1=Mehrotra, 2=Modified Mehrotra
-                # "Crossover" => 1,       # 0=no, 1=yes
+                "Crossover" => 0,       # 0=no, 1=yes
                 # "Presolve" => 4,        # -1=auto, 0=off, 1=fast, 2=normal, 3=aggressive, 4=unlimited (until nothing else possible)
                 # "Scaling" => 1,         # -1=auto, 0=no, 1=yes
                 # "GPUMode" => 1,       # 0=CPU, 1=GPU (used with PDLP algoritm, only for machine 41)
@@ -512,17 +512,23 @@ Considerations for data structure:
     ) = results
 
     # Save decision variables
-    CSV.write(joinpath(results_dir, "Costs.csv"), Costs)                        # 1
-    CSV.write(joinpath(results_dir, "Gen_Cap.csv"), Generation_Capacity)
-    CSV.write(joinpath(results_dir, "Gen_Inv.csv"), Generation_Investment)
-    CSV.write(joinpath(results_dir, "Sto_Inv.csv"), Storage_Investment)
-    CSV.write(joinpath(results_dir, "Export.csv"), Export_to)
-    CSV.write(joinpath(results_dir, "Import.csv"), Import_from)
-    CSV.write(joinpath(results_dir, "Exp_Imp.csv"), Export_Import)
-    CSV.write(joinpath(results_dir, "VM_node.csv"), Nodal_Voltage)
-    CSV.write(joinpath(results_dir, "VA_node.csv"), Nodal_Angle)
-    CSV.write(joinpath(results_dir, "P_line.csv"), Active_Flow)
-    CSV.write(joinpath(results_dir, "Q_line.csv"), Reactive_Flow)
+    CSV.write(joinpath(results_dir, "Costs.csv"), Costs; delim=";")                        # 1
+    CSV.write(joinpath(results_dir, "Gen_Cap.csv"), Generation_Capacity; delim=";")
+    CSV.write(joinpath(results_dir, "Gen_Inv.csv"), Generation_Investment; delim=";")
+    CSV.write(joinpath(results_dir, "Sto_Inv.csv"), Storage_Investment; delim=";")
+    CSV.write(joinpath(results_dir, "Export.csv"), Export_to; delim=";")
+    CSV.write(joinpath(results_dir, "Import.csv"), Import_from; delim=";")
+    CSV.write(joinpath(results_dir, "Exp_Imp.csv"), Export_Import; delim=";")
+    CSV.write(joinpath(results_dir, "VM_node.csv"), Nodal_Voltage; delim=";")
+    CSV.write(joinpath(results_dir, "VA_node.csv"), Nodal_Angle; delim=";")
+    CSV.write(joinpath(results_dir, "P_line.csv"), Active_Flow; delim=";")
+    CSV.write(joinpath(results_dir, "Q_line.csv"), Reactive_Flow; delim=";")
+
+    CSV.write(joinpath(results_dir, "Gen_Disp.csv"), Generation_Dispatch; delim=";")
+    CSV.write(joinpath(results_dir, "Q_Disp.csv"), Reactive_Dispatch; delim=";")
+    CSV.write(joinpath(results_dir, "Sto_Ch.csv"), Storage_Charge; delim=";")
+    CSV.write(joinpath(results_dir, "Sto_Dch.csv"), Storage_Discharge; delim=";")
+    CSV.write(joinpath(results_dir, "Sto_Lv.csv"), Storage_Level; delim=";")
 
     jldsave(joinpath(results_dir, "Gen_Disp.jld2"); Generation_Dispatch)
     jldsave(joinpath(results_dir, "Q_Disp.jld2"); Reactive_Dispatch)

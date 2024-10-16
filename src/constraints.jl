@@ -1012,11 +1012,10 @@ current constraints:
 
     if options.power_flow == :lac
 
-        for t ∈ PERIODS 
-            for (idx, line) ∈ enumerate(LINES)
-                G = Lines_props[line][:g_total]
-                B = Lines_props[line][:b_total]
-
+        for (idx, line) ∈ enumerate(LINES)
+            G = Lines_props[line][:g_total]
+            B = Lines_props[line][:b_total]
+            for t ∈ PERIODS
                 # EQ (36) - (37) #
                 # active flow
                 @constraint(model,
