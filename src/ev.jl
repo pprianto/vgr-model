@@ -8,7 +8,7 @@
 # )
 
 #=------------------------------------------------------------------------------
------ EV ADD on to MULTINODE
+----- Based on EV ADD on to MULTINODE
 ----- Year: 2021
 ----- by: Maria Taljegård
 ----- last modified: 210421
@@ -37,98 +37,105 @@ current constraints:
 ------------------------------------------------------------------------------=#
     ## Sets and parameters
 
-    @unpack NODES, 
-            TRANSMISSION_NODES,
-            SE3_TRANS_NODES,
-            NO1_TRANS_NODES,
-            DK1_TRANS_NODES,
-            COAST_NODES,
-            GBG,
-            GEN_TECHS, 
-            EL_GEN, 
-            HEAT_GEN, 
-            H2_GEN, 
-            STO_TECHS, 
-            EL_STO, 
-            HEAT_STO, 
-            H2_STO, 
-            PERIODS, 
-            LINES, 
-            NODE_FROM, 
-            NODE_TO, 
-            CHP,
-            FC,
-            WIND,
-            PV,
-            HP,
-            BOILER,
-            EC,
-            FLEX_TH,
-            THERMAL_1H,
-            THERMAL_2H,
-            # THERMAL_8H,
-            THERMAL_12H = sets
+    (;  NODES, 
+        TRANSMISSION_NODES,
+        SE3_TRANS_NODES,
+        NO1_TRANS_NODES,
+        DK1_TRANS_NODES,
+        COAST_NODES,
+        GBG,
+        GEN_TECHS, 
+        EL_GEN, 
+        HEAT_GEN, 
+        H2_GEN, 
+        STO_TECHS, 
+        EL_STO, 
+        HEAT_STO, 
+        H2_STO, 
+        PERIODS, 
+        LINES, 
+        NODE_FROM, 
+        NODE_TO, 
+        CHP,
+        FC,
+        WIND,
+        PV,
+        HP,
+        BOILER,
+        EC,
+        FLEX_TH,
+        THERMAL_1H,
+        THERMAL_2H,
+        # THERMAL_8H,
+        THERMAL_12H
+    ) = sets
     
-    @unpack SE3_price,
-            NO1_price,
-            DK1_price, 
-            Gentech_data, 
-            Stotech_data, 
-            Eldemand_data,
-            Reactive_Demand, 
-            Heatdemand_data, 
-            H2demand_data, 
-            # Discount_rate,
-            Gen_cos_ϕ, 
-            Gen_sin_ϕ, 
-            Demand_cos_ϕ, 
-            Demand_sin_ϕ, 
-            Lines_props = params
-            # Vnom = params
+    (;  SE3_price,
+        NO1_price,
+        DK1_price, 
+        Gentech_data, 
+        Stotech_data, 
+        Eldemand_data,
+        Reactive_Demand, 
+        Heatdemand_data, 
+        H2demand_data, 
+        # Discount_rate,
+        # Gen_cos_ϕ, 
+        # Gen_sin_ϕ, 
+        Demand_cos_ϕ, 
+        Demand_sin_ϕ, 
+        Lines_props,
+        # Vnom 
+    ) = params
 
     ## Variables
 
-    @unpack total_cost,
-            capex,
-            fix_om,
-            fuel_cost,
-            var_om,
-            start_part_costs,
-            exp_imp_costs,
-            tax_cost,
-            existing_generation,
-            generation_investment,
-            storage_investment,
-            active_generation,
-            reactive_generation,
-            generation_spin,
-            generation_on,
-            gen_startup_cost,
-            gen_partload_cost,
-            gen_startup_CO2,
-            gen_partload_CO2,
-            storage_charge,
-            storage_discharge,
-            storage_level,
-            nodal_voltage,
-            nodal_angle,
-            import_export,
-            export_to,
-            import_from,
-            active_flow,
-            reactive_flow = vars
+    (;  total_cost,
+        capex,
+        fix_om,
+        fuel_cost,
+        var_om,
+        start_part_costs,
+        exp_imp_costs,
+        tax_cost,
+        existing_generation,
+        generation_investment,
+        storage_investment,
+        active_generation,
+        reactive_generation,
+        generation_spin,
+        generation_on,
+        gen_startup_cost,
+        gen_partload_cost,
+        gen_startup_CO2,
+        gen_partload_CO2,
+        storage_charge,
+        storage_discharge,
+        storage_level,
+        nodal_voltage,
+        nodal_angle,
+        import_export,
+        export_to,
+        import_from,
+        active_flow,
+        reactive_flow,
+        pev_charging_slow,       
+        pev_discharge_net,       
+        pev_storage,             
+        pev_need,                
+    ) = vars
 
 
 # other road vehicle types than passenger cars, "LT" = light trucks, "HT" = heavy trucks and "Bus"=bus
 TRUCKS_BUSES = [
     :LT,
     :HT,
-    :BUS
+    :BUS,
 ]
 
-EV_eff = 0.95
-
 # Summarised charging infrastructure in Dict for easier calling
+# for now the default is 30kW battery capacity, with 1hr of charging infrastructure
+# i.e. BatCap = 30, Charging_infra = 0.95
 EV_infrastructure = Dict(
     15 => Dict(:EVBat_Cap => 15, :home => 0.71, :h6 => 0.74, :h3 => 0.81, :h1 => 0.87, :ers => 1.0),
     30 => Dict(:EVBat_Cap => 30, :home => 0.83, :h6 => 0.91, :h3 => 0.92, :h1 => 0.95, :ers => 1.0),
@@ -137,34 +144,33 @@ EV_infrastructure = Dict(
 )
 
 # Fleet Battery Capacity (in kWh)
-EVBat_Cap = EV_infrastructure[options.BatCap][:EVBat_Cap]
+EV_Bat_Cap = EV_infrastructure[EV_options.BatCap][:EVBat_Cap]
 
 # Charging Power (kW)
-if EV.CP == 3.7
-    CP_slow = 3.7
-elseif EV.CP == 6.9
-    CP_slow = 6.9
-elseif EV.CP == 11.0
-    CP_slow = 11.0
-elseif EV.CP == 22.0
-    CP_slow = 22.0
-end
+CP_slow =  EV_options.CP        # according to the global settings
+
+# Charging Infrastructure and
+# "Xh" = connected at all stops longer than X hours, grid connection "home" = only at the home location
+# depending on the model options
+# Share of the kilometer for the vehicle fleet that can be driven on electricity
+# depending mainly on charging infrastructure and battery size
+Share_el = EV_infrastructure[EV_options.BatCap][EV_options.Charging_infra]
 
 # Share of V2G and optimum of the vehicle fleet
-V2G_share = 0.3 # as default
-opt_share = 0.3 # as default
+# should be depending on the options
+V2G_share = 0 # as default for now
+Opt_share = 0 # as default for now
 
-# fuel (el or H2) consumption in kWh per km including losses from the engine in the vehicle
-FC_el = 0.16
-FC_H2 = 0.59*0.92*0.69
+# EV efficiency
+# charging or discharging efficiency to the grid (i.e. battery efficiency one-way)
+EV_eff = 0.95
+
+# fuel consumption (FC) in kWh per km including losses from the engine in the vehicle
+FC_el = 0.16                    # electricity        
+FC_H2 = 0.59 * 0.92 * 0.69      # H2 as fuel
 
 # estimated number of kilometers driven per year on el and non-el (in km)
 km_yr = 13000
-
-# Share of the kilometer for the vehicle fleet that can be driven on electricity
-# depending mainly on charging infrastructure and battery size
-
-share_el = EV_infrastructure[options.BatCap][options.Charging_infra]
 
 @variables model begin
     pev_charging_slow[t ∈ PERIODS, i ∈ NODES] ≥ 0   # charging of the vehicle battery [MWh per hour]

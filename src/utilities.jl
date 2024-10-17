@@ -386,6 +386,7 @@ function parse_inc_file(inc_file::String)
     return Float64.(data)
 end
 
+
 function combine_fleetava()
 
     # to adjust accordingly
@@ -402,15 +403,37 @@ function combine_fleetava()
     data_h6 = parse_inc_file(h6_file)
 
     fleet_df = DataFrame(
-    :fleet_home => data_home,
-    :fleet_h6 => data_h6,
-    :fleet_h3 => data_h3,
-    :fleet_h1 => data_h1,
+    :hour => 1:length(data_home),   # all fleet available database have same length
+    :home => data_home,
+    :h6 => data_h6,
+    :h3 => data_h3,
+    :h1 => data_h1,
     )
 
-    CSV.write(joinpath(input_dir, "fleet_availability.csv"), fleet_df)
+    CSV.write(joinpath(input_dir, "fleet_availability.csv"), fleet_df; delim = ";")
 
     return fleet_df
 
 end
 
+
+function combine_share_ev_year()
+
+    # to adjust accordingly
+    high_share_file = "share_EV_all_y_high.INC"  # Path to your .INC file
+    data_high_share = parse_inc_file(high_share_file)
+
+    low_share_file = "share_EV_all_y_low.INC"  # Path to your .INC file
+    data_low_share = parse_inc_file(low_share_file)
+
+    share_ev = DataFrame(
+    :year => 2010:2050,
+    :high => data_high_share,
+    :low => data_low_share
+    )
+
+    CSV.write(joinpath(input_dir, "share_ev_year.csv"), share_ev; delim = ";")
+
+    return share_ev
+
+end

@@ -2,6 +2,7 @@
 ----------------------------------- STRUCTS ------------------------------------
 
 Define structs to store model components parameters and results 
+Also includes model options
 
 ------------------------------------------------------------------------------=#
 
@@ -22,13 +23,17 @@ end
 
 
 Base.@kwdef mutable struct EVOptions
-    BatCap          ::Float64 = 60      # assumed battery capacity, default 60 kWh (15, 30, 60, 85)
+    BatCap          ::Float64 = 30      # assumed battery capacity, default 60 kWh (15, 30, 60, 85)
     CP              ::Float64 = 6.9     # assumed charger power, default 6.9 kW (3.7, 6.9, 11.0, 22.0)
     Charging_infra  ::Symbol = :h1      # assumed passenger car charging infrastructure (home, h1, h3, h6, ers)
     V2G             ::Symbol = :no      # charging capability :yes or :no
-    Direct          ::Symbol = :no      # charging capability :yes or :no
-    Optimal         ::Symbol = :no      # charging capability :yes or :no
+    Direct          ::Symbol = :yes      # charging capability :yes or :no
+    Optimal         ::Symbol = :yes      # charging capability :yes or :no
     Qty             ::Symbol = :high    # scenario of number of EVs :high or :low
+    ERS             ::Symbol = :no      # electrified road system
+    Cars_H2         ::Symbol = :no
+    Trucks_H2       ::Symbol = :no
+    EV_number       ::Symbol = :high    # :high (60% 2030 100% 2050) or :low (30% 2030 60% 2050)
     ### others coming up
 end
 
