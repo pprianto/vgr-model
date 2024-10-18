@@ -189,7 +189,7 @@ Return
     ]
 
     PV = [
-        :PVROOF,   # rooftop pv residential
+            :PVROOF,   # rooftop pv residential
             :PVUTIL,   # fixed axis utility PV
             :PVTRACK   # single axis tracking utility PV
     ]
@@ -247,6 +247,20 @@ Return
                     :WPCHP
     ]
 
+    # Batteries separated into energy and capacity components
+    BAT_CAP = [
+                :LI_CAP; 
+                :VR_CAP
+    ]
+    
+    BAT_EN = [
+                :LI_EN; 
+                :VR_EN
+    ]
+
+    # subsets of storages, excluding capacity components of batteries
+    STO_EN = setdiff(STO_TECHS, BAT_CAP)
+
     #=------------------------------------------------------------------------------
     Return
     ------------------------------------------------------------------------------=#
@@ -281,7 +295,10 @@ Return
                 THERMAL_1H = Symbol.(THERMAL_1H),
                 THERMAL_2H = Symbol.(THERMAL_2H),
                 # THERMAL_8H = Symbol.(THERMAL_8H),
-                THERMAL_12H = Symbol.(THERMAL_12H)
+                THERMAL_12H = Symbol.(THERMAL_12H),
+                BAT_CAP = Symbol.(BAT_CAP),
+                BAT_EN = Symbol.(BAT_EN),
+                STO_EN = Symbol.(STO_EN)
     )
 
     params = (; SE3_price,
@@ -339,7 +356,8 @@ current variables:
         STO_TECHS, 
         PERIODS, 
         LINES, 
-        FLEX_TH
+        FLEX_TH,
+        STO_EN
     ) = sets
         
     (; Lines_props) = params
@@ -386,9 +404,9 @@ current variables:
 
     # Storage-related variables (MWh)
     @variables model begin
-        storage_charge[t ∈ PERIODS, i ∈ NODES, s ∈ STO_TECHS]     ≥ 0
-        storage_discharge[t ∈ PERIODS, i ∈ NODES, s ∈ STO_TECHS]  ≥ 0
-        storage_level[t ∈ PERIODS, i ∈ NODES, s ∈ STO_TECHS]      ≥ 0
+        storage_charge[t ∈ PERIODS, i ∈ NODES, s ∈ STO_EN]     ≥ 0
+        storage_discharge[t ∈ PERIODS, i ∈ NODES, s ∈ STO_EN]  ≥ 0
+        storage_level[t ∈ PERIODS, i ∈ NODES, s ∈ STO_EN]      ≥ 0
     end
 
     #=------------------------------------------------------------------------------

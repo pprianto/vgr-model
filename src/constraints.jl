@@ -36,6 +36,9 @@ current constraints:
         HP,
         EC,
         FLEX_TH,
+        BAT_CAP,
+        BAT_EN,
+        STO_EN
     ) = sets
         
     (;  SE3_price,
@@ -106,7 +109,7 @@ current constraints:
     # fix O&M costs (in k€/MW)
     # subsets to use in this constraint
     NOT_EC = setdiff(GEN_TECHS, EC)
-    NOT_VRBAT = setdiff(STO_TECHS, [:VRBAT])
+    NOT_BAT = setdiff(STO_TECHS, [BAT_CAP; BAT_EN])
     @constraint(model, 
         fix_om ≥
         # generation tech fix O&M costs, electrolyser defined differently since the fix OM is based on % of investment
@@ -115,9 +118,11 @@ current constraints:
             # generation tech fix O&M costs for electrolyser
             sum((generation_investment[i, x] * Gentech_data[x].InvCost * CRF_gen[x]) * Gentech_data[x].FixOM for x ∈ EC ) +    
             # storage tech fix O&M costs, vanadium redox defined differently since the fix OM is based on % of investment
-            sum(storage_investment[i, s] * Stotech_data[s].FixOM for s ∈ NOT_VRBAT) +                                            
-            # storage tech fix O&M costs for vanadium redox
-            sum((storage_investment[i, :VRBAT] * Stotech_data[:VRBAT].InvCost * CRF_sto[:VRBAT]) * Stotech_data[:VRBAT].FixOM)
+            sum(storage_investment[i, s] * Stotech_data[s].FixOM for s ∈ NOT_BAT) +                                            
+            # storage tech fix O&M costs for lithium ion
+            sum(storage_investment[i, :LI_CAP] * Stotech_data[:LI_CAP].FixOM) +
+            # storage tech fix O&M costs for vanadium redox, dependent of total investment
+            sum((storage_investment[i, :VR_CAP] * Stotech_data[:VR_CAP].InvCost * CRF_sto[:VR_CAP]) * Stotech_data[:VR_CAP].FixOM)
         for i ∈ NODES ) 
     )
 
@@ -145,7 +150,7 @@ current constraints:
             sum( 
                 sum(active_generation[t, i, x] * Gentech_data[x].VarOM for x ∈ GEN_TECHS) +                                             
                 # storage tech variable O&M costs 
-                sum(storage_discharge[t, i, s] * Stotech_data[s].VarOM for s ∈ STO_TECHS)
+                sum(storage_discharge[t, i, s] * Stotech_data[s].VarOM for s ∈ STO_EN)
                 for i ∈ NODES)
         for t ∈ PERIODS)
     )
@@ -719,7 +724,8 @@ current constraints:
 
     (;  NODES, 
         STO_TECHS, 
-        PERIODS
+        PERIODS,
+        STO_EN
     ) = sets
         
     (; Stotech_data) = params
@@ -755,24 +761,37 @@ current constraints:
 
     @constraints model begin
         # Storage level limited by the capacity
-        Storage_Level_Limit[t ∈ PERIODS, i ∈ NODES, s ∈ STO_TECHS],    
+        Storage_Level_Limit[t ∈ PERIODS, i ∈ NODES, s ∈ STO_EN],    
             storage_level[t, i, s] ≤ storage_investment[i, s]
     
         # Hourly storage level
-        Storage_Balance[t ∈ PERIODS, i ∈ NODES, s ∈ STO_TECHS],
+        Storage_Balance[t ∈ PERIODS, i ∈ NODES, s ∈ STO_EN],
             storage_level[t, i, s] == 
             (t > 1 ? storage_level[t-1, i, s] : Initial_Storage[i,s]) + 
             storage_charge[t, i, s] * Stotech_data[s].Ch_eff - 
             storage_discharge[t, i, s] / Stotech_data[s].Dch_eff
     
         # Storage charge limited by the capacity and discharging rate
-        Storage_charge_limit[t ∈ PERIODS, i ∈ NODES, s ∈ STO_TECHS],    
+        Storage_charge_limit[t ∈ PERIODS, i ∈ NODES, s ∈ STO_EN],    
             storage_charge[t, i, s] ≤ storage_investment[i, s] / Stotech_data[s].InjectionRate
     
         # Storage discharge limited by the capacity and charging rate
-        Storage_discharge_limit[t ∈ PERIODS, i ∈ NODES, s ∈ STO_TECHS],    
-            storage_discharge[t, i, s] ≤ storage_investment[i, s] / Stotech_data[s].WithdrawalRate    
+        Storage_discharge_limit[t ∈ PERIODS, i ∈ NODES, s ∈ STO_EN],    
+            storage_discharge[t, i, s] ≤ storage_investment[i, s] / Stotech_data[s].WithdrawalRate
+
+        # Battery charge and discharge limited by the capacity component limit
+        LiIon_charge_limit[t ∈ PERIODS, i ∈ NODES],    
+            storage_charge[t, i, :LI_EN] ≤ storage_investment[i, :LI_CAP]   
+
+        LiIon_discharge_limit[t ∈ PERIODS, i ∈ NODES],    
+            storage_discharge[t, i, :LI_EN] ≤ storage_investment[i, :LI_CAP]       
         
+        VaRedox_charge_limit[t ∈ PERIODS, i ∈ NODES],    
+            storage_charge[t, i, :VR_EN] ≤ storage_investment[i, :VR_CAP]   
+
+        VaRedox_discharge_limit[t ∈ PERIODS, i ∈ NODES],    
+            storage_discharge[t, i, :VR_EN] ≤ storage_investment[i, :VR_CAP]  
+
         # Line Rock cavern cycle limits
         Line_caverns_limit_1[i ∈ NODES],
             sum( storage_charge[t, i, :LRC] * Stotech_data[:LRC].Ch_eff for t ∈ PERIODS) ≤ storage_investment[i, :LRC] * 20
@@ -828,7 +847,8 @@ current constraints:
         FC,
         HP,
         BOILER,
-        EC
+        EC,
+        BAT_EN,
     ) = sets
         
     (;  Gentech_data, 
@@ -861,6 +881,15 @@ current constraints:
     println("El nodal balance constraints")
     println("---------------------------------------------")
 
+    # El demand for charging H2 storage
+    η_el_H2 = Dict(
+        :LRC => 0.083,
+        :HST => 0.083
+    )
+    
+    # heat from hydrogen, not used for now
+    η_heat_H2 = 0.169;
+
     # Electricity nodal balance
     # define electricity flow  from lines coming in/out of nodes
     # enter considered as generation/supply, vice versa
@@ -879,15 +908,15 @@ current constraints:
             # active power nodal balance
             @constraint(model, 
                 Eldemand_data[t, node] +                                                         # el demand
-                sum(active_generation[t, node, x] / Gentech_data[x].Alpha for x ∈ HP) +          # for HP
+                sum(active_generation[t, node, x] / Gentech_data[x].COP for x ∈ HP) +          # for HP
                 sum(active_generation[t, node, x] / Gentech_data[x].Efficiency for x ∈ BOILER) + # for boilers
-                sum(active_generation[t, node, x] / Gentech_data[x].Efficiency for x ∈ EC) +     # for electrolyser / H2 demand
-                sum(storage_charge[t, node, s] for s ∈ EL_STO) +                                 # charge battery
-                sum(storage_charge[t, node, s] * 0.02 for s ∈ H2_STO) +                          # charge  h2 storage compressor, 2% of storage
+                sum(active_generation[t, node, x] for x ∈ EC) +                                  # for electrolyser / H2 demand
+                sum(storage_charge[t, node, s] for s ∈ BAT_EN) +                                 # charge battery
+                sum(storage_charge[t, node, s] * η_el_H2[s] for s ∈ H2_STO) +                    # el demand to charge h2 storage compressor
                 (is_transmission_node ? export_to[t, node] : 0) + 
                 p_exit ≤                                                                         # el flow to other nodes
                 sum(active_generation[t, node, x] for x ∈ EL_GEN) +                              # el generation (active)
-                sum(storage_discharge[t, node, s] for s ∈ EL_STO) +                              # battery discharge
+                sum(storage_discharge[t, node, s] for s ∈ BAT_EN) +                              # battery discharge
                 sum(active_generation[t, node, x] for x ∈ FC) +                                  # this applies for Fuel Cell (H2 -> EL)
                 p_enter +                                                                        # el flow to this node
                 (is_transmission_node ? import_from[t, node] : 0)                        # import/export

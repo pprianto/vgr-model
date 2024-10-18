@@ -174,11 +174,11 @@ function set_solver(model, solver::Symbol = :gurobi)
                 "Method" => 2,                     # -1: auto, 1: dual simplex, 2: barrier
                 "Presolve" => 2,                    # 2: aggressive
                 "PreSparsify" => 2,                    # 2: aggressive
-                "NumericFocus" => 2,
-                "NodefileStart" => 0.5,
-                "Aggregate" => 1,
-                "MemLimit" => 250,
-                "ScaleFlag" => 1,
+                "NumericFocus" => 1,
+                # "NodefileStart" => 0.5,
+                "Aggregate" => 2,
+                # "MemLimit" => 250,
+                "ScaleFlag" => 3,
                 "DisplayInterval" => 300,
         )
         
@@ -263,7 +263,8 @@ Considerations for data structure:
         EL_GEN, 
         STO_TECHS, 
         PERIODS, 
-        LINES, 
+        LINES,
+        STO_EN 
     ) = sets
 
     ## Variables
@@ -405,7 +406,7 @@ Considerations for data structure:
         end
 
         for node ∈ NODES
-            for tech in STO_TECHS  
+            for tech in STO_EN  
                 for time in PERIODS
                     push!(Storage_Charge, (node, tech, time, value(storage_charge[time, node, tech])))
                     push!(Storage_Discharge, (node, tech, time, value(storage_discharge[time, node, tech])))
@@ -443,8 +444,6 @@ Considerations for data structure:
             Active_Flow[!, Symbol(line)] = [value(active_flow[t, line]) for t ∈ PERIODS]
             Reactive_Flow[!, Symbol(line)] = [value(reactive_flow[t, line]) for t ∈ PERIODS]
         end
-
-
 
         results =   (; 
                     Costs,
