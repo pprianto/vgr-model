@@ -374,27 +374,33 @@ current constraints:
     # does not make sense to buy sea water and transport it
     # define subset not coastal node
     NOT_COAST = setdiff(NODES, COAST_NODES)
-    for t ∈ PERIODS
-        for node ∈ NOT_COAST
-            fix(
-            active_generation[t, node, :WOFF], 
-            0.0, 
-            force=true
-            )
-        end
-    end
-
     for node ∈ NOT_COAST
         fix(
-        generation_investment[node, :WOFF], 
-        0.0, 
-        force=true
+            generation_investment[node, :WOFF], 
+            0.0, 
+            force=true
         )
         
         fix(generation_investment[node, :HPSW], 
-        0.0, 
-        force=true
+            0.0, 
+            force=true
         )
+    end
+
+    for t ∈ PERIODS
+        for node ∈ NOT_COAST
+            fix(
+                active_generation[t, node, :WOFF], 
+                0.0, 
+                force=true
+            )
+
+            fix(
+                active_generation[t, node, :HPSW], 
+                0.0, 
+                force=true
+            )
+        end
     end
 
     # techs that most probably not invested in future
@@ -419,14 +425,6 @@ current constraints:
         end
     end
     
-    # Pit Thermal Storage is not feasible in Gothenburg
-    for node ∈ GBG
-        fix(storage_investment[node, :PTES], 
-            0.0,
-            force=true
-        )
-    end
-
     #=------------------------------------------------------------------------------
     GENERATION MINIMUM INVESTMENT
     according to ACCEL Report
@@ -722,7 +720,8 @@ current constraints:
 ------------------------------------------------------------------------------=#
     ## Sets and parameters
 
-    (;  NODES, 
+    (;  NODES,
+        GBG,
         STO_TECHS, 
         PERIODS,
         STO_EN
@@ -752,11 +751,11 @@ current constraints:
     println("Storage constraints")
     println("---------------------------------------------")
 
-    initSto = zeros(length(NODES), length(STO_TECHS))#, length(PERIODS))
+    initSto = zeros(length(NODES), length(STO_EN))#, length(PERIODS))
     Initial_Storage = AxisArrays.AxisArray(
                                     initSto, 
                                     AxisArrays.Axis{:node_id}(NODES), 
-                                    AxisArrays.Axis{:Tech}(STO_TECHS)
+                                    AxisArrays.Axis{:Tech}(STO_EN)
     )#, Axis{:time}(PERIODS)) 
 
     @constraints model begin
@@ -792,14 +791,48 @@ current constraints:
         VaRedox_discharge_limit[t ∈ PERIODS, i ∈ NODES],    
             storage_discharge[t, i, :VR_EN] ≤ storage_investment[i, :VR_CAP]  
 
-        # Line Rock cavern cycle limits
-        Line_caverns_limit_1[i ∈ NODES],
-            sum( storage_charge[t, i, :LRC] * Stotech_data[:LRC].Ch_eff for t ∈ PERIODS) ≤ storage_investment[i, :LRC] * 20
+        # # Line Rock cavern cycle limits (charging and discharging), assumed 20 times per year
+        # Line_caverns_limit_1[i ∈ NODES],
+        #     sum( storage_charge[t, i, :LRC] * Stotech_data[:LRC].Ch_eff for t ∈ PERIODS) ≤ storage_investment[i, :LRC] * 20
 
-        Line_caverns_limit_2[i ∈ NODES],
-            sum( storage_discharge[t, i, :LRC] / Stotech_data[:LRC].Dch_eff for t ∈ PERIODS) ≤ storage_investment[i, :LRC] * 20    
+        # Line_caverns_limit_2[i ∈ NODES],
+        #     sum( storage_discharge[t, i, :LRC] / Stotech_data[:LRC].Dch_eff for t ∈ PERIODS) ≤ storage_investment[i, :LRC] * 20    
+
+        LRC_cycle_limits[i ∈ NODES],
+        sum(storage_charge[t, i, :LRC] * Stotech_data[:LRC].Ch_eff +
+            storage_discharge[t, i, :LRC] / Stotech_data[:LRC].Dch_eff for t ∈ PERIODS) ≤ storage_investment[i, :LRC] * 20
 
         #TODO: losses in the storage? thermal, battery capacity, etc.?
+    end
+
+    # Pit Thermal Storage is not feasible in Gothenburg
+    for node ∈ GBG
+        fix(storage_investment[node, :PTES], 
+        0.0,
+        force=true
+        )
+    end
+
+    for t ∈ PERIODS
+        for node ∈ GBG
+            fix(
+            storage_charge[t, node, :PTES], 
+            0.0,
+            force=true
+            )
+            
+            fix(
+            storage_discharge[t, node, :PTES], 
+            0.0,
+            force=true
+            )
+            
+            fix(
+            storage_level[t, node, :PTES], 
+            0.0,
+            force=true
+            )
+        end
     end
 
 end     # end sto_constraints
@@ -883,8 +916,8 @@ current constraints:
 
     # El demand for charging H2 storage
     η_el_H2 = Dict(
-        :LRC => 0.083,
-        :HST => 0.083
+        :LRC => 0.02,
+        :HST => 0.02
     )
     
     # heat from hydrogen, not used for now
@@ -908,8 +941,8 @@ current constraints:
             # active power nodal balance
             @constraint(model, 
                 Eldemand_data[t, node] +                                                         # el demand
-                sum(active_generation[t, node, x] for x ∈ HP) +                                  # demand for HP
-                sum(active_generation[t, node, x] for x ∈ BOILER) +                              # demand for boilers
+                sum(active_generation[t, node, x] / Gentech_data[x].COP for x ∈ HP) +            # demand for HP
+                sum(active_generation[t, node, x] / Gentech_data[x].Efficiency for x ∈ BOILER) + # demand for boilers
                 sum(active_generation[t, node, x] for x ∈ EC) +                                  # for electrolyser / H2 demand
                 sum(storage_charge[t, node, s] for s ∈ BAT_EN) +                                 # charge battery
                 sum(storage_charge[t, node, s] * η_el_H2[s] for s ∈ H2_STO) +                    # el demand to charge h2 storage compressor
@@ -917,7 +950,7 @@ current constraints:
                 p_exit ≤                                                                         # el flow to other nodes
                 sum(active_generation[t, node, x] for x ∈ EL_GEN) +                              # el generation (active)
                 sum(storage_discharge[t, node, s] for s ∈ BAT_EN) +                              # battery discharge
-                sum(active_generation[t, node, x] * Gentech_data[x].Efficiency for x ∈ FC) +     # this applies for Fuel Cell (H2 -> EL)
+                sum(active_generation[t, node, x] for x ∈ FC) +                                  # this applies for Fuel Cell (H2 -> EL)
                 p_enter +                                                                        # el flow to this node
                 (is_transmission_node ? import_from[t, node] : 0)                                # import to transmission
             )
@@ -947,8 +980,8 @@ current constraints:
                 Heatdemand_data[t, node] +
                 sum(storage_charge[t, node, s] for s ∈ HEAT_STO) ≤                                 # charging heat storage
                 sum(active_generation[t, node, x] / Gentech_data[x].Alpha for x ∈ CHP) +           # generation from heat techs, CHP if with alpha
-                sum(active_generation[t, node, x] * Gentech_data[x].COP for x ∈ HP) +                                    # for HP
-                sum(active_generation[t, node, x] * Gentech_data[x].Efficiency for x ∈ BOILER) +                                # for boilers            
+                sum(active_generation[t, node, x] for x ∈ HP) +                                    # for HP
+                sum(active_generation[t, node, x] for x ∈ BOILER) +                                # for boilers            
                 sum(storage_discharge[t, node, s] for s ∈ HEAT_STO)                                # discharge from heat storage
                 # possibility to buy heat from other region?
             )
@@ -967,7 +1000,7 @@ current constraints:
             @constraint(model,
                 H2demand_data[t, node] +
                 sum(storage_charge[t, node, s] for s ∈ H2_STO) +                                   # charging heat storage
-                sum(active_generation[t, node, x] for x ∈ FC) ≤                                    # fuel cell to convert h2 - el
+                sum(active_generation[t, node, x] / Gentech_data[x].Efficiency for x ∈ FC) ≤                                    # fuel cell to convert h2 - el
                 sum(active_generation[t, node, x] * Gentech_data[x].Efficiency for x ∈ EC) +       # electrolyser to convert el - h2
                 sum(storage_discharge[t, node, s] for s ∈ H2_STO)                                  # discharge from H2 storage
                 # possibility to buy H2 from other region?

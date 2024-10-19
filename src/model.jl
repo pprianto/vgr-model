@@ -557,10 +557,10 @@ Considerations for data structure:
     CSV.write(joinpath(results_dir, "Sto_Dch.csv"), Storage_Discharge; delim=";")
     CSV.write(joinpath(results_dir, "Sto_Lv.csv"), Storage_Level; delim=";")
 
-    jldsave(joinpath(results_dir, "Gen_Disp.jld2"); Generation_Dispatch)
-    jldsave(joinpath(results_dir, "Q_Disp.jld2"); Reactive_Dispatch)
-    jldsave(joinpath(results_dir, "Sto_Ch.jld2"); Storage_Charge)
-    jldsave(joinpath(results_dir, "Sto_Dch.jld2"); Storage_Discharge)
-    jldsave(joinpath(results_dir, "Sto_Lv.jld2"); Storage_Level)                # 16
+    # jldsave(joinpath(results_dir, "Gen_Disp.jld2"); Generation_Dispatch)
+    # jldsave(joinpath(results_dir, "Q_Disp.jld2"); Reactive_Dispatch)
+    # jldsave(joinpath(results_dir, "Sto_Ch.jld2"); Storage_Charge)
+    # jldsave(joinpath(results_dir, "Sto_Dch.jld2"); Storage_Discharge)
+    # jldsave(joinpath(results_dir, "Sto_Lv.jld2"); Storage_Level)                # 16
 
 end

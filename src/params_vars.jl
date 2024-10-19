@@ -112,9 +112,9 @@ Return
     #=------------------------------------------------------------------------------
     MAIN SETS
     ------------------------------------------------------------------------------=#  
-    NODES = grid_infra.subs[!, :node_id]        # node set
-    GEN_TECHS = tech_props.gen[!, :Tech]        # generation tech set
-    STO_TECHS = tech_props.sto[!, :Tech]        # storage tech set
+    NODES = Symbol.(grid_infra.subs[!, :node_id])        # node set
+    GEN_TECHS = Symbol.(tech_props.gen[!, :Tech])        # generation tech set
+    STO_TECHS = Symbol.(tech_props.sto[!, :Tech])        # storage tech set
 
     if options.run == :full
         PERIODS = demand.el[!, :hour]               # time period set (hourly), full run
@@ -161,9 +161,9 @@ Return
     TRANSMISSION NODES SUBSETS
     ------------------------------------------------------------------------------=# 
     trans_node = filter(row -> row.import_trans == true, grid_infra.subs)    
-    SE3_TRANS_NODES = filter(row -> !(row.node_id in [:MOL1, :DAL3]), trans_node).node_id
-    NO1_TRANS_NODES = filter(row -> row.node_id == :DAL3, trans_node).node_id
-    DK1_TRANS_NODES = filter(row -> row.node_id == :MOL1, trans_node).node_id
+    SE3_TRANS_NODES = filter(row -> !(row.node_id in ["MOL1", "DAL3"]), trans_node).node_id
+    NO1_TRANS_NODES = filter(row -> row.node_id == "DAL3", trans_node).node_id
+    DK1_TRANS_NODES = filter(row -> row.node_id == "MOL1", trans_node).node_id
     TRANSMISSION_NODES = trans_node.node_id
 
     #=------------------------------------------------------------------------------
