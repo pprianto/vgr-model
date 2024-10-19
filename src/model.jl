@@ -390,24 +390,36 @@ Considerations for data structure:
 
 
         for node ∈ NODES
-            for tech in GEN_TECHS  
-                for time in PERIODS
+            for tech ∈ GEN_TECHS  
+                for time ∈ PERIODS
                     push!(Generation_Dispatch, (node, tech, time, value(active_generation[time, node, tech])))
                 end
             end
         end
 
+        # aggregate the nodes dispatch into total (VGR)
+        VGR_gen_dispatch = combine(groupby(Generation_Dispatch, [:Tech, :Period]), :Dispatch => sum => :Dispatch)
+        VGR_gen_dispatch[!, :Node] .= :VGR
+        VGR_gen_dispatch = select(VGR_gen_dispatch, :Node, :Tech, :Period, :Dispatch)
+        Generation_Dispatch = vcat(Generation_Dispatch, VGR_gen_dispatch)
+
         for node ∈ NODES
-            for tech in EL_GEN  
-                for time in PERIODS
+            for tech ∈ EL_GEN  
+                for time ∈ PERIODS
                     push!(Reactive_Dispatch, (node, tech, time, value(reactive_generation[time, node, tech])))
                 end
             end
         end
 
+        # aggregate the nodes dispatch into total (VGR)
+        VGR_rea_dispatch = combine(groupby(Reactive_Dispatch, [:Tech, :Period]), :Dispatch => sum => :Dispatch)
+        VGR_rea_dispatch[!, :Node] .= :VGR
+        VGR_rea_dispatch = select(VGR_rea_dispatch, :Node, :Tech, :Period, :Dispatch)
+        Reactive_Dispatch = vcat(Reactive_Dispatch, VGR_rea_dispatch)
+
         for node ∈ NODES
-            for tech in STO_EN  
-                for time in PERIODS
+            for tech ∈ STO_EN  
+                for time ∈ PERIODS
                     push!(Storage_Charge, (node, tech, time, value(storage_charge[time, node, tech])))
                     push!(Storage_Discharge, (node, tech, time, value(storage_discharge[time, node, tech])))
                     push!(Storage_Level, (node, tech, time, value(storage_level[time, node, tech])))
@@ -415,6 +427,22 @@ Considerations for data structure:
                 end
             end
         end
+
+        # aggregate the nodes charge, discharge, level into total (VGR)
+        VGR_sto_charge = combine(groupby(Storage_Charge, [:Tech, :Period]), :Charge => sum => :Charge)
+        VGR_sto_charge[!, :Node] .= :VGR
+        VGR_sto_charge = select(VGR_sto_charge, :Node, :Tech, :Period, :Charge)
+        Storage_Charge = vcat(Storage_Charge, VGR_sto_charge)
+
+        VGR_sto_discharge = combine(groupby(Storage_Discharge, [:Tech, :Period]), :Discharge => sum => :Discharge)
+        VGR_sto_discharge[!, :Node] .= :VGR
+        VGR_sto_discharge = select(VGR_sto_discharge, :Node, :Tech, :Period, :Discharge)
+        Storage_Discharge = vcat(Storage_Discharge, VGR_sto_discharge)
+
+        VGR_sto_lv = combine(groupby(Storage_Level, [:Tech, :Period]), :Level => sum => :Level)
+        VGR_sto_lv[!, :Node] .= :VGR
+        VGR_sto_lv = select(VGR_sto_lv, :Node, :Tech, :Period, :Level)
+        Storage_Level = vcat(Storage_Level, VGR_sto_lv)
 
         # Import Export solutions
         Export_to = DataFrame()

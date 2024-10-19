@@ -137,7 +137,7 @@ current constraints:
             sum(
                 sum(active_generation[t, i, x] * Gentech_data[x].FuelPrice / Gentech_data[x].Efficiency for x ∈ TECHS_W_FUEL) +
                 # operational costs for HP and electrolyser uses elprice
-                sum(active_generation[t, i, x] * SE3_price[t] / Gentech_data[x].Efficiency for x ∈ TECHS_W_EL_PRICE)
+                sum(active_generation[t, i, x] * SE3_price[t] for x ∈ TECHS_W_EL_PRICE)
                 for i ∈ NODES)
         for t ∈ PERIODS)
     )
@@ -187,9 +187,9 @@ current constraints:
         # taxes for EB and HP
         sum( 
             sum( 
-                options.El_Heat_Tax * active_generation[t, i, :EB] / Gentech_data[:EB].Efficiency +                                             
+                options.El_Heat_Tax * active_generation[t, i, :EB] +                                             
                 # taxes for HP 
-                sum(options.El_Heat_Tax * active_generation[t, i, x] / Gentech_data[x].Alpha for x ∈ HP) 
+                sum(options.El_Heat_Tax * active_generation[t, i, x] for x ∈ HP) 
             for i ∈ NODES)
         for t ∈ PERIODS)
     )
@@ -445,18 +445,18 @@ current constraints:
         sum( existing_generation[i, :WOFF] + generation_investment[i, :WOFF] for i ∈ STE_LYS ) ≥ 1400
     )
 
-    # # Expected total investments of offshore wind power is 7500 MW
-    # # beräknas kunna bidra med ytterligare 30 TWh och ca 7 500 MW efter 2030. 
-    # # Svenska kraftnät har tilldelat 1 200 MW till en anslutningspunkt för havsbaserad vindkraft i Norra Västerhavet.
-    # # Maybe comment for now, too many offshore wind
-    # @constraint(model,
-    #     sum( existing_generation[i, :WOFF] + generation_investment[i, :WOFF] for i ∈ COAST_NODES ) ≥ 7500
-    # )
+    # Expected total investments of offshore wind power is 7500 MW
+    # beräknas kunna bidra med ytterligare 30 TWh och ca 7 500 MW efter 2030. 
+    # Svenska kraftnät har tilldelat 1 200 MW till en anslutningspunkt för havsbaserad vindkraft i Norra Västerhavet.
+    # limited to 1400 + 7500
+    @constraint(model, Max_WOFF_inv,
+        sum( existing_generation[i, :WOFF] + generation_investment[i, :WOFF] for i ∈ COAST_NODES ) ≤ 9000
+    )
 
-    # Maximum investments of onshore wind power is 1700 MW
+    # Maximum investments of onshore wind power is 1800 MW
     # Potentiell installerad effekt 2030 antas vara närmare 1 770 MW varav 1348 MW var installerad redan 2023. 
     @constraint(model, Max_WON_inv,
-        sum( existing_generation[i, :WON] + generation_investment[i, :WON] for i ∈ NODES ) ≤ 1700
+        sum( existing_generation[i, :WON] + generation_investment[i, :WON] for i ∈ NODES ) ≤ 1800
     )
 
     # Minimum investments of solar is 1700 MW
@@ -525,7 +525,7 @@ current constraints:
         # subset of not so general gen tech
         NOT_GENERAL_GEN_TECHS = setdiff(GEN_TECHS, [WIND; PV])
         @constraint(model, Active_Generation_Limit_up[t ∈ PERIODS, i ∈ NODES, x ∈ NOT_GENERAL_GEN_TECHS],
-        active_generation[t, i, x] ≤ existing_generation[i, x] + generation_investment[i, x])
+            active_generation[t, i, x] ≤ existing_generation[i, x] + generation_investment[i, x])
     end  
 
     # Bounds of reactive generation
@@ -908,18 +908,18 @@ current constraints:
             # active power nodal balance
             @constraint(model, 
                 Eldemand_data[t, node] +                                                         # el demand
-                sum(active_generation[t, node, x] / Gentech_data[x].COP for x ∈ HP) +          # for HP
-                sum(active_generation[t, node, x] / Gentech_data[x].Efficiency for x ∈ BOILER) + # for boilers
+                sum(active_generation[t, node, x] for x ∈ HP) +                                  # demand for HP
+                sum(active_generation[t, node, x] for x ∈ BOILER) +                              # demand for boilers
                 sum(active_generation[t, node, x] for x ∈ EC) +                                  # for electrolyser / H2 demand
                 sum(storage_charge[t, node, s] for s ∈ BAT_EN) +                                 # charge battery
                 sum(storage_charge[t, node, s] * η_el_H2[s] for s ∈ H2_STO) +                    # el demand to charge h2 storage compressor
-                (is_transmission_node ? export_to[t, node] : 0) + 
+                (is_transmission_node ? export_to[t, node] : 0) +                                # export to transmission
                 p_exit ≤                                                                         # el flow to other nodes
                 sum(active_generation[t, node, x] for x ∈ EL_GEN) +                              # el generation (active)
                 sum(storage_discharge[t, node, s] for s ∈ BAT_EN) +                              # battery discharge
-                sum(active_generation[t, node, x] for x ∈ FC) +                                  # this applies for Fuel Cell (H2 -> EL)
+                sum(active_generation[t, node, x] * Gentech_data[x].Efficiency for x ∈ FC) +     # this applies for Fuel Cell (H2 -> EL)
                 p_enter +                                                                        # el flow to this node
-                (is_transmission_node ? import_from[t, node] : 0)                        # import/export
+                (is_transmission_node ? import_from[t, node] : 0)                                # import to transmission
             )
             
             # EQ (32) #
@@ -947,8 +947,8 @@ current constraints:
                 Heatdemand_data[t, node] +
                 sum(storage_charge[t, node, s] for s ∈ HEAT_STO) ≤                                 # charging heat storage
                 sum(active_generation[t, node, x] / Gentech_data[x].Alpha for x ∈ CHP) +           # generation from heat techs, CHP if with alpha
-                sum(active_generation[t, node, x] for x ∈ HP) +                                    # for HP
-                sum(active_generation[t, node, x] for x ∈ BOILER) +                                # for boilers            
+                sum(active_generation[t, node, x] * Gentech_data[x].COP for x ∈ HP) +                                    # for HP
+                sum(active_generation[t, node, x] * Gentech_data[x].Efficiency for x ∈ BOILER) +                                # for boilers            
                 sum(storage_discharge[t, node, s] for s ∈ HEAT_STO)                                # discharge from heat storage
                 # possibility to buy heat from other region?
             )
@@ -967,7 +967,7 @@ current constraints:
             @constraint(model,
                 H2demand_data[t, node] +
                 sum(storage_charge[t, node, s] for s ∈ H2_STO) +                                   # charging heat storage
-                sum(active_generation[t, node, x] / Gentech_data[x].Efficiency for x ∈ FC) ≤       # fuel cell to convert h2 - el
+                sum(active_generation[t, node, x] for x ∈ FC) ≤                                    # fuel cell to convert h2 - el
                 sum(active_generation[t, node, x] * Gentech_data[x].Efficiency for x ∈ EC) +       # electrolyser to convert el - h2
                 sum(storage_discharge[t, node, s] for s ∈ H2_STO)                                  # discharge from H2 storage
                 # possibility to buy H2 from other region?
