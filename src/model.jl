@@ -132,6 +132,7 @@ function read_input_data(
     # demand data
     # currently in hourly period
     el_demand_df = read_file(joinpath(input_dir, "el_nodal_demand_$(options.scenario).csv"))
+    el_demand_df = new_industries_el_demand(el_demand_df)
     heat_demand_df = read_file(joinpath(input_dir, "heat_nodal_demand_$(options.scenario).csv"))
     h2_demand_df = read_file(joinpath(input_dir, "h2_nodal_demand_$(options.scenario).csv"))
 

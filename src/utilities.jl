@@ -147,6 +147,27 @@ function process_pp(
 end
 
 
+function new_industries_el_demand(
+    el_demand_df::DataFrame
+)
+    
+    # new load in Torslanda
+    # NOVO 1.17 TWh
+    # Node GBG3
+
+    el_demand_df[!, "GBG3"] .+= 1170000/8760
+
+    # new load in Mariestad
+    # NOVO 2.25 TWh
+    # Node MRS1
+
+    el_demand_df[!, "MRS1"] .+= 2250000/8760
+
+    return el_demand_df
+
+end
+
+
 function admittance_matrix(
     lines_df::DataFrame
 )
