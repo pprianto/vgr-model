@@ -131,9 +131,9 @@ function read_input_data(
 
     # demand data
     # currently in hourly period
-    el_demand_df = read_file(joinpath(input_dir, "el_nodal_demand.csv"))
-    heat_demand_df = read_file(joinpath(input_dir, "heat_nodal_demand.csv"))
-    h2_demand_df = read_file(joinpath(input_dir, "h2_nodal_demand.csv"))
+    el_demand_df = read_file(joinpath(input_dir, "el_nodal_demand_$(options.scenario).csv"))
+    heat_demand_df = read_file(joinpath(input_dir, "heat_nodal_demand_$(options.scenario).csv"))
+    h2_demand_df = read_file(joinpath(input_dir, "h2_nodal_demand_$(options.scenario).csv"))
 
     # RE profiles
     PV_fix_profile = read_file(joinpath(input_dir, "nodal_profile_pv_fixed_$(options.profile_year).csv"))          # fixed axis pv

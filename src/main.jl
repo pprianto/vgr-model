@@ -47,16 +47,24 @@ include("params_vars.jl")
 include("constraints.jl")
 include("model.jl")
 
-# Set directory
-
+# Set directories
 const current_dir::String = pwd()
 mkpath("modelinput")                                            # input folder, should already be created during retrieve OSM process
 mkpath("results")                                               # results folder
 const input_dir::String = joinpath(current_dir, "modelinput")
 const results_dir::String = joinpath(current_dir, "results")
-const options::ModelOptions = ModelOptions(run=:full, FlexLim=:yes, EV=:no)          # decided as global for now so that can be called in functions
+
+# Model options
+# decided as global for now so that can be called in functions
+const options::ModelOptions = ModelOptions(
+                                            run=:full, 
+                                            scenario=:beta, 
+                                            FlexLim=:yes, 
+                                            EV=:no
+)          
+
 if options.EV == :yes
-    const EV_options::EVOptions = EVOptions()          # decided as global for now so that can be called in functions
+    const EV_options::EVOptions = EVOptions()
 end
 
 nothing

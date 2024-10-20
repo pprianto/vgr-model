@@ -12,6 +12,7 @@ Base.@kwdef mutable struct ModelOptions
     CO2_limit       ::Float64 = 0.0
     target_year     ::Int = 2050        # model target year
     profile_year    ::Int = 2019        # model profile
+    scenario        ::Symbol = :beta
     power_flow      ::Symbol = :lac     # linearised AC (LAC) or DC
     Discount_rate   ::Float64 = 0.05    # assumed discount rate
     El_Heat_Tax     ::Float64 = 60.0
