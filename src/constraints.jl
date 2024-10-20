@@ -68,6 +68,10 @@ current constraints:
         gen_partload_CO2,
         storage_discharge,
         import_export,
+        HP_as_demand,
+        EB_as_demand,
+        EC_as_demand,
+        FC_as_demand,   
     ) = vars
 
     #=------------------------------------------------------------------------------
@@ -130,6 +134,18 @@ current constraints:
     # subsets to use in this constraint
     TECHS_W_EL_PRICE = [HP; EC; :EB]
     TECHS_W_FUEL = setdiff(GEN_TECHS, TECHS_W_EL_PRICE) # first argument is the larger set
+    # @constraint(model, 
+    #     fuel_cost ≥ 
+    #     # operational costs for techs that use fuel 
+    #     sum( 
+    #         sum(
+    #             sum(active_generation[t, i, x] * Gentech_data[x].FuelPrice / Gentech_data[x].Efficiency for x ∈ TECHS_W_FUEL) +
+    #             # operational costs for HP and electrolyser uses elprice
+    #             sum(active_generation[t, i, x] * SE3_price[t] for x ∈ TECHS_W_EL_PRICE)
+    #             for i ∈ NODES)
+    #     for t ∈ PERIODS)
+    # )
+
     @constraint(model, 
         fuel_cost ≥ 
         # operational costs for techs that use fuel 
@@ -137,7 +153,9 @@ current constraints:
             sum(
                 sum(active_generation[t, i, x] * Gentech_data[x].FuelPrice / Gentech_data[x].Efficiency for x ∈ TECHS_W_FUEL) +
                 # operational costs for HP and electrolyser uses elprice
-                sum(active_generation[t, i, x] * SE3_price[t] for x ∈ TECHS_W_EL_PRICE)
+                sum(HP_as_demand[t, i, x] * SE3_price[t] for x ∈ HP) +
+                EB_as_demand[t, i, :EB] * SE3_price[t] +
+                sum(EC_as_demand[t, i, x] * SE3_price[t] for x ∈ EC)
                 for i ∈ NODES)
         for t ∈ PERIODS)
     )
@@ -289,6 +307,7 @@ current constraints:
         FC,
         WIND,
         PV,
+        EC,
         FLEX_TH
     ) = sets
         
@@ -437,6 +456,32 @@ current constraints:
         :LYS2
     ]
     
+    # Electrolysers assumed to be only allowed in areas that have hydrogen demand
+    # in this case, Gothenburg, Lysekil, Stenungsund nodes
+    EC_LOC = [GBG; STE_LYS]
+    EC_NOT_ELIGIBLE = setdiff(NODES, EC_LOC)
+
+    for node ∈ EC_NOT_ELIGIBLE
+        for tech ∈ EC
+            fix(generation_investment[node, tech], 
+            0.0,
+            force=true
+            )
+        end
+    end
+
+    for t ∈ PERIODS
+        for node ∈ EC_NOT_ELIGIBLE
+            for tech ∈ EC
+                fix(
+                active_generation[t, node, tech], 
+                0.0,
+                force=true
+                )
+            end
+        end
+    end
+
     # Minimum investments of offshore wind power is 1400 MW - Poseidon project
     # Poseidon omfattar 5,5 TWh och en effekt om 1 400 MW och skulle kunna vara på plats tidigast 2030.
     @constraint(model, Min_WOFF_inv,
@@ -722,7 +767,8 @@ current constraints:
 
     (;  NODES,
         GBG,
-        STO_TECHS, 
+        STO_TECHS,
+        H2_STO, 
         PERIODS,
         STO_EN
     ) = sets
@@ -835,6 +881,44 @@ current constraints:
         end
     end
 
+    # LRC assumed to be only allowed in areas that have hydrogen demand
+    # in this case, Gothenburg, Lysekil, Stenungsund nodes
+    LRC_LOC = [GBG; :STE1; :LYS1; :LYS2]
+    LRC_NOT_ELIGIBLE = setdiff(NODES, LRC_LOC)
+
+    for node ∈ LRC_NOT_ELIGIBLE
+        for tech ∈ H2_STO
+            fix(storage_investment[node, tech], 
+            0.0,
+            force=true
+            )
+        end
+    end
+
+    for t ∈ PERIODS
+        for node ∈ LRC_NOT_ELIGIBLE
+            for tech ∈ H2_STO
+                fix(
+                storage_charge[t, node, tech], 
+                0.0,
+                force=true
+                )
+                
+                fix(
+                storage_discharge[t, node, tech], 
+                0.0,
+                force=true
+                )
+                
+                fix(
+                storage_level[t, node, tech], 
+                0.0,
+                force=true
+                )
+            end
+        end
+    end
+
 end     # end sto_constraints
 
 
@@ -900,7 +984,11 @@ current constraints:
         export_to,
         import_from,
         active_flow,
-        reactive_flow
+        reactive_flow,
+        HP_as_demand,
+        EB_as_demand,
+        EC_as_demand,
+        FC_as_demand,   
     ) = vars
 
     #=------------------------------------------------------------------------------
@@ -924,13 +1012,13 @@ current constraints:
     η_heat_H2 = 0.169;
 
 
-    # temporary variables for conversion technologies
-    @variables model begin
-        HP_as_demand[t ∈ PERIODS, i ∈ NODES, x ∈ HP] ≥ 0    # Heat Pumps
-        EB_as_demand[t ∈ PERIODS, i ∈ NODES, x ∈ [:EB]] ≥ 0       # Electric Boiler
-        EC_as_demand[t ∈ PERIODS, i ∈ NODES, x ∈ EC] ≥ 0    # Electrolyser
-        FC_as_demand[t ∈ PERIODS, i ∈ NODES, x ∈ FC] ≥ 0    # Fuel Cell
-    end
+    # # temporary variables for conversion technologies
+    # @variables model begin
+    #     HP_as_demand[t ∈ PERIODS, i ∈ NODES, x ∈ HP] ≥ 0    # Heat Pumps
+    #     EB_as_demand[t ∈ PERIODS, i ∈ NODES, x ∈ [:EB]] ≥ 0       # Electric Boiler
+    #     EC_as_demand[t ∈ PERIODS, i ∈ NODES, x ∈ EC] ≥ 0    # Electrolyser
+    #     FC_as_demand[t ∈ PERIODS, i ∈ NODES, x ∈ FC] ≥ 0    # Fuel Cell
+    # end
 
     @constraints model begin
         # HP conversion

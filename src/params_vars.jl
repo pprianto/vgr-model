@@ -48,9 +48,9 @@ Return
     elseif options.run == :trial || :test
         # trial runs
         # adjust hour accordingly
-        Eldemand_data = demand.el[1:24, :]
-        Heatdemand_data = demand.heat[1:24, :]
-        H2demand_data = demand.h2[1:24, :]
+        Eldemand_data = demand.el[1:168, :]
+        Heatdemand_data = demand.heat[1:168, :]
+        H2demand_data = demand.h2[1:168, :]
 
     else
         @error "No run type named $run."
@@ -119,7 +119,7 @@ Return
     if options.run == :full
         PERIODS = demand.el[!, :hour]               # time period set (hourly), full run
     elseif options.run == :trial || :test
-        PERIODS = demand.el[1:24, :hour]             # time period set (hourly), trial runs
+        PERIODS = demand.el[1:168, :hour]             # time period set (hourly), trial runs
     else
         @error "No run type named $run."
     end
@@ -357,7 +357,10 @@ current variables:
         PERIODS, 
         LINES, 
         FLEX_TH,
-        STO_EN
+        STO_EN,
+        HP,
+        EC,
+        FC,
     ) = sets
         
     (; Lines_props) = params
@@ -400,6 +403,14 @@ current variables:
     @variables model begin
         active_generation[t ∈ PERIODS, i ∈ NODES, x ∈ GEN_TECHS]  ≥ 0
         reactive_generation[t ∈ PERIODS, i ∈ NODES, x ∈ EL_GEN]
+    end
+
+    # temporary variables for conversion technologies
+    @variables model begin
+        HP_as_demand[t ∈ PERIODS, i ∈ NODES, x ∈ HP] ≥ 0    # Heat Pumps
+        EB_as_demand[t ∈ PERIODS, i ∈ NODES, x ∈ [:EB]] ≥ 0       # Electric Boiler
+        EC_as_demand[t ∈ PERIODS, i ∈ NODES, x ∈ EC] ≥ 0    # Electrolyser
+        FC_as_demand[t ∈ PERIODS, i ∈ NODES, x ∈ FC] ≥ 0    # Fuel Cell
     end
 
     # Storage-related variables (MWh)
@@ -544,7 +555,11 @@ current variables:
                     pev_charging_slow,       
                     pev_discharge_net,       
                     pev_storage,             
-                    pev_need,                
+                    pev_need,      
+                    HP_as_demand,
+                    EB_as_demand,
+                    EC_as_demand,
+                    FC_as_demand,          
         )
 
     elseif options.FlexLim == :yes && options.EV == :no
@@ -578,6 +593,10 @@ current variables:
                     import_from,
                     active_flow,
                     reactive_flow,
+                    HP_as_demand,
+                    EB_as_demand,
+                    EC_as_demand,
+                    FC_as_demand,   
         )
 
     else
@@ -605,6 +624,10 @@ current variables:
                     import_from,
                     active_flow,
                     reactive_flow,
+                    HP_as_demand,
+                    EB_as_demand,
+                    EC_as_demand,
+                    FC_as_demand,   
         )
 
     end
