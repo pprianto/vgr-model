@@ -108,7 +108,7 @@ current constraints:
             sum(generation_investment[i, x] * Gentech_data[x].InvCost * CRF_gen[x] for x ∈ GEN_TECHS) +
         # storage techs capacity investment costs
             sum(storage_investment[i, s] * Stotech_data[s].InvCost * CRF_sto[s] for s ∈ STO_TECHS) 
-        for i ∈ NODES) * 1e3                                     
+        for i ∈ NODES) / 1e3                                     
     )
 
     # fix O&M costs (in k€/MW)
@@ -128,7 +128,7 @@ current constraints:
             sum(storage_investment[i, :LI_CAP] * Stotech_data[:LI_CAP].FixOM) +
             # storage tech fix O&M costs for vanadium redox, dependent of total investment
             sum((storage_investment[i, :VR_CAP] * Stotech_data[:VR_CAP].InvCost * CRF_sto[:VR_CAP]) * Stotech_data[:VR_CAP].FixOM)
-        for i ∈ NODES) * 1e3 
+        for i ∈ NODES) / 1e3
     )
 
     # fuel costs (in €/MWh)
@@ -158,7 +158,7 @@ current constraints:
                 EB_as_demand[t, i, :EB] * SE3_price[t] +
                 sum(EC_as_demand[t, i, x] * SE3_price[t] for x ∈ EC)
                 for i ∈ NODES)
-        for t ∈ PERIODS)
+        for t ∈ PERIODS) / 1e6
     )
 
     # variable O/M costs (in €/MWh)
@@ -171,7 +171,7 @@ current constraints:
                 # storage tech variable O&M costs 
                 sum(storage_discharge[t, i, s] * Stotech_data[s].VarOM for s ∈ STO_EN)
                 for i ∈ NODES)
-        for t ∈ PERIODS)
+        for t ∈ PERIODS) / 1e6
     )
 
     # start-up/part load costs (in €/MWh)
@@ -185,7 +185,7 @@ current constraints:
                     # partload costs
                     sum(gen_partload_cost[t, i, x] for x ∈ FLEX_TH)
                 for i ∈ NODES)
-            for t ∈ PERIODS)
+            for t ∈ PERIODS) / 1e6
         )
     end
 
@@ -197,7 +197,7 @@ current constraints:
             sum(import_export[t, i] * SE3_price[t] for i ∈ SE3_TRANS_NODES) +
             sum(import_export[t, i] * NO1_price[t] for i ∈ NO1_TRANS_NODES) +
             sum(import_export[t, i] * DK1_price[t] for i ∈ DK1_TRANS_NODES) 
-        for t ∈ PERIODS)
+        for t ∈ PERIODS) / 1e6
     )
 
     # taxes by using el for heat (in €/MWh)
@@ -210,7 +210,7 @@ current constraints:
                 # taxes for HP 
                 sum(options.El_Heat_Tax * active_generation[t, i, x] for x ∈ HP) 
             for i ∈ NODES)
-        for t ∈ PERIODS)
+        for t ∈ PERIODS) / 1e6
     )
 
     #=------------------------------------------------------------------------------
@@ -260,7 +260,7 @@ current constraints:
                         sum(active_generation[t, i, x] * Gentech_data[x].Emission / Gentech_data[x].Efficiency * options.Emission_fee for x ∈ GEN_TECHS) +
                         sum( (gen_startup_CO2[t, i, x] + gen_partload_CO2[t, i, x]) * options.Emission_fee for x ∈ FLEX_TH)
                     for i ∈ NODES)
-                for t ∈ PERIODS)
+                for t ∈ PERIODS) / 1e6
             )
         else
             @constraint(model,
@@ -269,7 +269,7 @@ current constraints:
                     sum(
                         sum(active_generation[t, i, x] * Gentech_data[x].Emission / Gentech_data[x].Efficiency * options.Emission_fee for x ∈ GEN_TECHS)
                     for i ∈ NODES)
-                for t ∈ PERIODS)
+                for t ∈ PERIODS) / 1e6
             )
         end
 

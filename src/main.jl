@@ -22,16 +22,11 @@ Example of run:
     m.vars
 );
 
-vgr_gen_cap = vgr_investment(results.Generation_Capacity)
-vgr_gen_inv = vgr_investment(results.Generation_Investment)
-vgr_sto_inv = vgr_investment(results.Storage_Investment)
+results.Generation_Capacity
+results.Generation_Investment
+results.Storage_Investment
 
-a = basic_barchart(vgr_gen_cap)
-b = basic_barchart(vgr_gen_inv)
-c = basic_barchart(vgr_sto_inv)
-
-Plots.savefig(a, "gen_1d.png")
-Plots.savefig(b, "sto_1d.png")
+save_variables(results)
 
 ------------------------------------------------------------------------------=#
 
@@ -57,7 +52,7 @@ const results_dir::String = joinpath(current_dir, "results")
 # Model options
 # decided as global for now so that can be called in functions
 const options::ModelOptions = ModelOptions(
-                                            run = :trial,           # :full or :trial :test
+                                            run = :full,           # :full or :trial :test
                                             CO2_budget = 0.0,       # in kgCO2
                                             target_year = 2050,     # model target year
                                             profile_year = 2019,    # model profile
@@ -70,7 +65,7 @@ const options::ModelOptions = ModelOptions(
                                             Emission_fee = 150.0,   # assumed CO2 emission fee (€/tonCO2)
                                             Vnom = 130.0,           # system voltage level (kV)
                                             FlexLim = :yes,         # option if flexlim constraint is included
-                                            EV = :yes,              # option if EV is included
+                                            EV = :no,              # option if EV is included
 )          
 
 if options.EV == :yes
