@@ -89,10 +89,16 @@ Return:
     optimize!(model)
 
     time_solve = time()-start_solve  
-    println("---------------------------------------------")
-    println("Time needed to solve = $(time_solve / 60) mins")
-    println("---------------------------------------------")
-    
+
+    if time_solve ≥ 3600
+        println("---------------------------------------------")
+        println("Time needed to solve = $(time_solve / 3600) hours")
+        println("---------------------------------------------")
+    else
+        println("---------------------------------------------")
+        println("Time needed to solve = $(time_solve / 60) mins")
+        println("---------------------------------------------")
+    end    
     #=------------------------------------------------------------------------------
     RETURN
     ------------------------------------------------------------------------------=#  
@@ -116,7 +122,7 @@ function read_input_data(
     # options=ModelOptions()
 )
     # electricity price
-    elpris_df = read_file(joinpath(input_dir, "elpris.csv"))
+    elpris_df = read_file(joinpath(input_dir, "elpris_$(options.el_price_year).csv"))
 
     # electrical infrastructure
     substations_df = read_file(joinpath(input_dir, "subs_final.csv"))
@@ -278,6 +284,7 @@ Considerations for data structure:
         start_part_costs,
         exp_imp_costs,
         tax_cost,
+        CO2_cost,
         existing_generation,
         generation_investment, 
         storage_investment, 
@@ -322,7 +329,8 @@ Considerations for data structure:
             :Var_OM_cost => value(var_om),
             :Start_Part_cost => value(start_part_costs),
             :Export_Import_cost => value(exp_imp_costs),
-            :Taxes_cost => value(tax_cost)
+            :Taxes_cost => value(tax_cost),
+            :CO2_cost => value(CO2_cost)
         )
 
         # Investment solutions
@@ -345,44 +353,7 @@ Considerations for data structure:
         Generation_Investment = sum_capacities(Generation_Investment)
         Storage_Investment = sum_capacities(Storage_Investment)
 
-        # # Dispatch solutions
-        # Generation_Dispatch = Dict{Symbol, DataFrame}()
-        # Reactive_Dispatch = Dict{Symbol, DataFrame}()
-        # Storage_Charge = Dict{Symbol, DataFrame}()
-        # Storage_Discharge = Dict{Symbol, DataFrame}()
-        # Storage_Level = Dict{Symbol, DataFrame}()
-
-        # for node ∈ NODES
-        #     Generation_Dispatch[node] = DataFrame(
-        #         [value(active_generation[t, node, tech]) for t ∈ PERIODS, tech ∈ GEN_TECHS], 
-        #         GEN_TECHS
-        #     )
-
-        #     Reactive_Dispatch[node] = DataFrame(
-        #         [value(reactive_generation[t, node, tech]) for t ∈ PERIODS, tech ∈ EL_GEN], 
-        #         EL_GEN
-        #     )
-
-        #     Storage_Charge[node] = DataFrame(
-        #         [value(storage_charge[t, node, tech]) for t ∈ PERIODS, tech ∈ STO_TECHS], 
-        #         STO_TECHS
-        #     )
-
-        #     Storage_Discharge[node] = DataFrame(
-        #         [value(storage_discharge[t, node, tech]) for t ∈ PERIODS, tech ∈ STO_TECHS], 
-        #         STO_TECHS
-        #     )
-
-        #     Storage_Level[node] = DataFrame(
-        #         [value(storage_level[t, node, tech]) for t ∈ PERIODS, tech ∈ STO_TECHS], 
-        #         STO_TECHS
-        #     )
-        # end
-
-        # Long DataFrame format for dispatch
-        # for consideration
-        # to adjust accordingly
-
+        # Dispatch solutions
         Generation_Dispatch = DataFrame(Node=Symbol[], Tech=Symbol[], Period=Int[], Dispatch=Float64[])
         Reactive_Dispatch = DataFrame(Node=Symbol[], Tech=Symbol[], Period=Int[], Dispatch=Float64[])
         Storage_Charge = DataFrame(Node=Symbol[], Tech=Symbol[], Period=Int[], Charge=Float64[])
