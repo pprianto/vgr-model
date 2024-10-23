@@ -9,16 +9,19 @@ Also includes model options
 Base.@kwdef mutable struct ModelOptions
     # model options with pre-defined configs
     run             ::Symbol            # :full or :trial :test
-    CO2_limit       ::Float64 = 0.0
+    CO2_budget      ::Float64 = 0.0     # in kgCO2
     target_year     ::Int = 2050        # model target year
     profile_year    ::Int = 2019        # model profile
-    scenario        ::Symbol = :beta
+    el_price_year   ::Int = 1991        # future el price model year (1991 or 1992)
+    scenario        ::Symbol = :beta    # :now, :alpha, :beta, with beta as highest demand increase
     power_flow      ::Symbol = :lac     # linearised AC (LAC) or DC
     Discount_rate   ::Float64 = 0.05    # assumed discount rate
-    El_Heat_Tax     ::Float64 = 60.0
-    Vnom            ::Float64 = 130.0   # system voltage level
-    FlexLim         ::Symbol = :yes
-    EV              ::Symbol = :yes
+    El_Heat_Tax     ::Float64 = 60.0    # assumed tax to generate electricity, on top of el price (€/MWh)
+    CO2_limit       ::Symbol = :fee     # constraint to limit CO2 emitting technology (:ton or :fee)
+    Emission_fee    ::Float64 = 150.0   # assumed CO2 emission fee (€/tonCO2)
+    Vnom            ::Float64 = 130.0   # system voltage level (kV)
+    FlexLim         ::Symbol = :yes     # option if flexlim constraint is included
+    EV              ::Symbol = :yes     # option if EV is included
     ### others coming up
 end
 

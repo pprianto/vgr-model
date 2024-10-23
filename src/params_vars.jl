@@ -381,6 +381,7 @@ current variables:
         start_part_costs    # in €
         exp_imp_costs       # in €
         tax_cost            # in €
+        CO2_cost            # in €
     end
 
     #=------------------------------------------------------------------------------
@@ -572,6 +573,7 @@ current variables:
                     start_part_costs,
                     exp_imp_costs,
                     tax_cost,
+                    CO2_cost,
                     existing_generation,
                     generation_investment,
                     storage_investment,

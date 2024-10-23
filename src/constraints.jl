@@ -59,6 +59,7 @@ current constraints:
         start_part_costs,
         exp_imp_costs,
         tax_cost,
+        CO2_cost,
         generation_investment,
         storage_investment,
         active_generation,
@@ -107,7 +108,7 @@ current constraints:
             sum(generation_investment[i, x] * Gentech_data[x].InvCost * CRF_gen[x] for x ∈ GEN_TECHS) +
         # storage techs capacity investment costs
             sum(storage_investment[i, s] * Stotech_data[s].InvCost * CRF_sto[s] for s ∈ STO_TECHS) 
-        for i ∈ NODES  )                                      
+        for i ∈ NODES) * 1e3                                     
     )
 
     # fix O&M costs (in k€/MW)
@@ -127,7 +128,7 @@ current constraints:
             sum(storage_investment[i, :LI_CAP] * Stotech_data[:LI_CAP].FixOM) +
             # storage tech fix O&M costs for vanadium redox, dependent of total investment
             sum((storage_investment[i, :VR_CAP] * Stotech_data[:VR_CAP].InvCost * CRF_sto[:VR_CAP]) * Stotech_data[:VR_CAP].FixOM)
-        for i ∈ NODES ) 
+        for i ∈ NODES) * 1e3 
     )
 
     # fuel costs (in €/MWh)
@@ -148,7 +149,7 @@ current constraints:
 
     @constraint(model, 
         fuel_cost ≥ 
-        # operational costs for techs that use fuel 
+        # operational costs for techs that use fuel (in €/MWh)
         sum( 
             sum(
                 sum(active_generation[t, i, x] * Gentech_data[x].FuelPrice / Gentech_data[x].Efficiency for x ∈ TECHS_W_FUEL) +
@@ -212,30 +213,6 @@ current constraints:
         for t ∈ PERIODS)
     )
 
-    # System Cost
-    # represented in k€ for the total cost
-    if options.FlexLim == :yes
-        @constraint(model, SystemCost,
-            total_cost * 1e3 ≥ capex * 1e3 +       # in k€
-                                fix_om * 1e3 +      # in k€
-                                fuel_cost +         # in €
-                                var_om +            # in €
-                                start_part_costs +  # in €
-                                exp_imp_costs +     # in €
-                                tax_cost            # in €
-        )
-
-    else
-        @constraint(model, SystemCost,
-            total_cost * 1e3 ≥ capex * 1e3 +       # in k€
-                                fix_om * 1e3 +      # in k€
-                                fuel_cost +         # in €
-                                var_om +            # in €
-                                exp_imp_costs +     # in €
-                                tax_cost            # in €
-        )
-    end
-
     #=------------------------------------------------------------------------------
     CO2 LIMITS
     EQ (43)
@@ -246,24 +223,81 @@ current constraints:
     println("CO2 constraints")
     println("---------------------------------------------")
 
+
+    if options.CO2_limit == :ton
+        # limiting the technologies based on CO2 limits/budgets
+        # can be very restrictive?
+        if options.FlexLim == :yes
+            @constraint(model,
+                sum(
+                    sum(
+                        sum(active_generation[t, i, x] * Gentech_data[x].Emission / Gentech_data[x].Efficiency for x ∈ GEN_TECHS) +
+                        sum(gen_startup_CO2[t, i, x] + gen_partload_CO2[t, i, x] for x ∈ FLEX_TH)
+                    for i ∈ NODES)
+                for t ∈ PERIODS) ≤
+                options.CO2_budget
+            )
+        else
+            @constraint(model,
+                sum(
+                    sum(
+                        sum(active_generation[t, i, x] * Gentech_data[x].Emission / Gentech_data[x].Efficiency for x ∈ GEN_TECHS)
+                    for i ∈ NODES)
+                for t ∈ PERIODS) ≤
+                options.CO2_budget
+            )
+        end
+
+        fix(CO2_cost, 0.0, force=true)
+
+    elseif options.CO2_limit == :fee
+        # limiting the technologies that emits CO2 by cost instead (in €/MWh)
+        if options.FlexLim == :yes
+            @constraint(model,
+                CO2_cost ≥
+                sum(
+                    sum(
+                        sum(active_generation[t, i, x] * Gentech_data[x].Emission / Gentech_data[x].Efficiency * options.Emission_fee for x ∈ GEN_TECHS) +
+                        sum( (gen_startup_CO2[t, i, x] + gen_partload_CO2[t, i, x]) * options.Emission_fee for x ∈ FLEX_TH)
+                    for i ∈ NODES)
+                for t ∈ PERIODS)
+            )
+        else
+            @constraint(model,
+                CO2_cost ≥
+                sum(
+                    sum(
+                        sum(active_generation[t, i, x] * Gentech_data[x].Emission / Gentech_data[x].Efficiency * options.Emission_fee for x ∈ GEN_TECHS)
+                    for i ∈ NODES)
+                for t ∈ PERIODS)
+            )
+        end
+
+    end
+
+    # System Cost
+    # represented in k€ for the total cost
     if options.FlexLim == :yes
-        @constraint(model,
-            sum(
-                sum(
-                    sum(active_generation[t, i, x] * Gentech_data[x].Emission / Gentech_data[x].Efficiency for x ∈ GEN_TECHS) +
-                    sum(gen_startup_CO2[t, i, x] + gen_partload_CO2[t, i, x] for x ∈ FLEX_TH)
-                for i ∈ NODES)
-            for t ∈ PERIODS) ≤
-            options.CO2_limit
+        @constraint(model, SystemCost,
+            total_cost ≥ capex +            # in k€
+                         fix_om +           # in k€
+                         fuel_cost +        # in €
+                         var_om +           # in €
+                         start_part_costs + # in €
+                         exp_imp_costs +    # in €
+                         tax_cost +         # in €
+                         CO2_cost           # in €
         )
+
     else
-        @constraint(model,
-            sum(
-                sum(
-                    sum(active_generation[t, i, x] * Gentech_data[x].Emission / Gentech_data[x].Efficiency for x ∈ GEN_TECHS)
-                for i ∈ NODES)
-            for t ∈ PERIODS) ≤
-            options.CO2_limit
+        @constraint(model, SystemCost,
+            total_cost ≥ capex +            # in k€
+                         fix_om +           # in k€
+                         fuel_cost +        # in €
+                         var_om +           # in €
+                         exp_imp_costs +    # in €
+                         tax_cost +         # in €
+                         CO2_cost           # in €
         )
     end
 
